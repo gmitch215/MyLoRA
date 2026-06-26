@@ -1,0 +1,29 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+package-lock.json
+.wrangler
+
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+.env.local
+
+# Playwright + coverage
+playwright-report
+playwright-results
+test-results
+coverage
