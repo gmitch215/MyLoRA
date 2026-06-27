@@ -15,11 +15,16 @@
 			"binding": "CACHE"
 		}
 	],
-    "r2_buckets": [
-        {
-            "binding": "BLOB"
-        }
-    ],
+	"r2_buckets": [
+		{
+			"binding": "BLOB"
+		}
+	],
+	"ai": {
+		"binding": "AI",
+		// run the native AI binding against cloudflare during local `wrangler dev`
+		"experimental_remote": true
+	},
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 1.0
