@@ -176,17 +176,17 @@
 		</section>
 
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-			<BreakdownCard
+			<AnalyticsBreakdownCard
 				title="Referrers"
 				:counts="data?.refs ?? {}"
 				:loading="pending"
 			/>
-			<BreakdownCard
+			<AnalyticsBreakdownCard
 				title="Devices"
 				:counts="data?.devices ?? {}"
 				:loading="pending"
 			/>
-			<BreakdownCard
+			<AnalyticsBreakdownCard
 				title="Browsers"
 				:counts="data?.browsers ?? {}"
 				:loading="pending"
