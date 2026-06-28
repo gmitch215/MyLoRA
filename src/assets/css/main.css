@@ -1,2 +1,21 @@
 @import 'tailwindcss';
 @import '@nuxt/ui';
+
+:root {
+	--ui-secondary: #1067ea;
+	--ui-success: #6df643;
+	--font-title: 'Noto Sans', sans-serif;
+}
+
+.scrollbar-hide {
+	scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+	display: none;
+}
+
+html,
+body {
+	overflow-x: hidden;
+}
