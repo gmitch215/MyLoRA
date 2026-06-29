@@ -47,16 +47,13 @@ export default defineEventHandler(async (event) => {
 	const bio = parsed.data.bio || null;
 	const now = Date.now();
 	try {
-		// atomic first-user guard: the WHERE NOT EXISTS is re-evaluated at insert time, so two
-		// concurrent setup requests cannot both create an administrator (closes the count-check race)
-		const res = await db.run(sql`
+		await db.run(sql`
 			INSERT INTO users (id, username, display_name, password_hash, role, bio, avatar_pathname, is_active, created_at, updated_at)
 			SELECT ${id}, ${username}, ${parsed.data.displayName}, ${hash}, ${'administrator'}, ${bio}, ${null}, ${1}, ${now}, ${now}
 			WHERE NOT EXISTS (SELECT 1 FROM users)
 		`);
-		const inserted =
-			(res as any)?.rowsAffected ?? (res as any)?.meta?.changes ?? (res as any)?.changes ?? 0;
-		if (!inserted) {
+		const check = await db.run(sql`SELECT id FROM users WHERE id = ${id} LIMIT 1`);
+		if (!check.rows?.[0]) {
 			throw createError({ statusCode: 409, statusMessage: 'Setup has already been completed' });
 		}
 	} catch (error: any) {
