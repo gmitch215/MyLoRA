@@ -10,7 +10,7 @@
 			<UButton
 				icon="mdi:refresh"
 				title="Refresh"
-				aria-label="Refresh analytics"
+				aria-label="Refresh Analytics"
 				variant="ghost"
 				size="sm"
 				:loading="pending"
@@ -18,7 +18,7 @@
 			/>
 		</div>
 
-		<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+		<div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
 			<KpiCard
 				label="Views"
 				:value="data?.kpis.views.value ?? 0"
@@ -29,6 +29,12 @@
 				label="Unique Visitors"
 				:value="data?.kpis.unique.value ?? 0"
 				:prev="data?.kpis.unique.prev ?? 0"
+				:loading="pending"
+			/>
+			<KpiCard
+				label="Inferences"
+				:value="data?.inferences.total ?? 0"
+				:prev="data?.inferences.prev ?? 0"
 				:loading="pending"
 			/>
 			<KpiCard
@@ -69,6 +75,45 @@
 		</section>
 
 		<section class="rounded border border-default p-3">
+			<div class="flex items-center justify-between mb-2">
+				<h3 class="text-sm font-medium text-highlighted">Inferences Over Time</h3>
+				<span class="text-xs text-muted tabular-nums">
+					{{ (data?.inferences.total ?? 0).toLocaleString() }} total
+				</span>
+			</div>
+			<div
+				v-if="pending"
+				class="h-40"
+			>
+				<USkeleton class="h-full w-full" />
+			</div>
+			<div
+				v-else-if="!data || (data.inferences.total === 0 && data.inferences.perDay.length === 0)"
+				class="text-muted text-center py-8 text-sm"
+			>
+				No inferences in this range.
+			</div>
+			<LazyAnalyticsInferenceChart
+				v-else
+				:per-day="data.inferences.perDay"
+				:height="180"
+			/>
+		</section>
+
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+			<AnalyticsBreakdownCard
+				title="Inferences by Model"
+				:counts="data?.inferences.byModel ?? {}"
+				:loading="pending"
+			/>
+			<AnalyticsBreakdownCard
+				title="Inferences by Audience"
+				:counts="data?.inferences.byAudience ?? {}"
+				:loading="pending"
+			/>
+		</div>
+
+		<section class="rounded border border-default p-3">
 			<h3 class="text-sm font-medium mb-2 text-highlighted">Top Adapters</h3>
 			<div
 				v-if="pending"
@@ -84,7 +129,7 @@
 			</div>
 			<div
 				v-else
-				class="overflow-x-auto"
+				class="scrollbar-hide overflow-x-auto"
 			>
 				<table class="min-w-full text-sm">
 					<thead class="text-left text-muted">
@@ -141,7 +186,7 @@
 			</div>
 			<div
 				v-else
-				class="overflow-x-auto"
+				class="scrollbar-hide overflow-x-auto"
 			>
 				<table class="min-w-full text-sm">
 					<thead class="text-left text-muted">
@@ -207,6 +252,13 @@ type Summary = {
 		completionRate: { value: number; prev: number };
 	};
 	perDay: { day: string; views: number; unique: number }[];
+	inferences: {
+		total: number;
+		prev: number;
+		perDay: { day: string; total: number }[];
+		byModel: Record<string, number>;
+		byAudience: Record<string, number>;
+	};
 	topAdapters: {
 		slug: string;
 		name: string;
