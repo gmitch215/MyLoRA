@@ -39,22 +39,23 @@
 						to="/tags"
 						title="Tags"
 						variant="subtle"
-						color="neutral"
+						color="primary"
 					/>
 					<SearchButton />
 					<UButton
+						v-if="loggedIn"
 						icon="mdi:flask"
 						to="/playground"
 						title="Playground"
 						variant="subtle"
-						color="neutral"
+						color="warning"
 					/>
 					<UButton
 						icon="mdi:account-badge"
 						to="/about"
 						title="About"
 						variant="subtle"
-						color="neutral"
+						color="secondary"
 					/>
 				</div>
 			</div>
@@ -127,13 +128,13 @@
 							to="/profile"
 							title="Profile"
 							variant="subtle"
-							color="neutral"
+							color="info"
 						/>
 						<UButton
 							icon="mdi:logout"
 							title="Log Out"
 							variant="ghost"
-							color="neutral"
+							color="error"
 							@click="onLogout"
 						/>
 					</template>
@@ -192,7 +193,7 @@ watch(
 
 const themeColorStyle = computed(() => {
 	const color = settings.value.themeColor || config.public.themeColor;
-	return color ? `color: ${color}` : '';
+	return color ? `color: ${resolveColorVar(color)}` : '';
 });
 
 // optional banner message persisted in settings
