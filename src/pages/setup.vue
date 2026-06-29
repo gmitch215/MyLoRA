@@ -323,11 +323,10 @@ async function onSubmit() {
 			icon: 'mdi:rocket-launch',
 			color: 'success'
 		});
-		// optimistic; D1 replica reads can lag the just-inserted row
 		status.value = {
 			needsSetup: false,
 			hasLegacyPassword: status.value?.hasLegacyPassword ?? false,
-			userCount: Math.max(1, status.value?.userCount ?? 0) + 1
+			userCount: Math.max(1, (status.value?.userCount ?? 0) + 1)
 		};
 		try {
 			await session.fetch();
