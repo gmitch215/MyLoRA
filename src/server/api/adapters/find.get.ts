@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters, users } from '~/server/db/schema';
+import { adapters, users } from 'hub:db:schema';
 import { getCurrentUser, hasCapability } from '~/server/utils/auth';
 import { ensureDatabase } from '~/server/utils/db';
 import { toAdapter } from '~/server/utils/serialize';

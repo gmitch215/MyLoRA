@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters, users } from '~/server/db/schema';
+import { adapters, users } from 'hub:db:schema';
 import { ensureDatabase } from '~/server/utils/db';
 import { toAdapter, toPublicUser } from '~/server/utils/serialize';
 

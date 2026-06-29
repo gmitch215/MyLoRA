@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { db } from 'hub:db';
 
 export default defineEventHandler(async (event) => {
 	await ensureDatabase();
@@ -46,11 +47,20 @@ export default defineEventHandler(async (event) => {
 	const bio = parsed.data.bio || null;
 	const now = Date.now();
 	try {
-		await db.run(sql`
+		// atomic first-user guard: the WHERE NOT EXISTS is re-evaluated at insert time, so two
+		// concurrent setup requests cannot both create an administrator (closes the count-check race)
+		const res = await db.run(sql`
 			INSERT INTO users (id, username, display_name, password_hash, role, bio, avatar_pathname, is_active, created_at, updated_at)
-			VALUES (${id}, ${username}, ${parsed.data.displayName}, ${hash}, ${'administrator'}, ${bio}, ${null}, ${1}, ${now}, ${now})
+			SELECT ${id}, ${username}, ${parsed.data.displayName}, ${hash}, ${'administrator'}, ${bio}, ${null}, ${1}, ${now}, ${now}
+			WHERE NOT EXISTS (SELECT 1 FROM users)
 		`);
+		const inserted =
+			(res as any)?.rowsAffected ?? (res as any)?.meta?.changes ?? (res as any)?.changes ?? 0;
+		if (!inserted) {
+			throw createError({ statusCode: 409, statusMessage: 'Setup has already been completed' });
+		}
 	} catch (error: any) {
+		if (error?.statusCode === 409) throw error;
 		const reason = describeDbError(error);
 		console.error('setup INSERT failed:', reason, error);
 		if (/UNIQUE.*username/i.test(reason)) {

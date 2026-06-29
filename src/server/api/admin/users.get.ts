@@ -1,9 +1,6 @@
 import { desc, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters, users } from '~/server/db/schema';
-import { requireAdmin } from '~/server/utils/auth';
-import { ensureDatabase } from '~/server/utils/db';
-import type { AdminUser } from '~/shared/types';
+import { adapters, users } from 'hub:db:schema';
 
 export default defineEventHandler(async (event) => {
 	await requireAdmin(event);

@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
-import { adapters } from '~/server/db/schema';
+import { db } from 'hub:db';
+import { adapters } from 'hub:db:schema';
 import { describeCfError, type FinetuneRecord, listFinetunes } from './cloudflare';
 
 const DEFAULT_BASE = '@cf/mistral/mistral-7b-instruct-v0.2-lora';

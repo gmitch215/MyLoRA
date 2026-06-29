@@ -1,11 +1,5 @@
 import { and, asc, desc, eq, like, or, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
-import { adapters, users } from '~/server/db/schema';
-import { getCurrentUser } from '~/server/utils/auth';
-import { ensureDatabase } from '~/server/utils/db';
-import { toAdapter } from '~/server/utils/serialize';
-import { getLimits } from '~/server/utils/settings';
-import type { Adapter } from '~/shared/types';
+import { adapters, users } from 'hub:db:schema';
 
 const SORTS = ['newest', 'downloads', 'inference', 'name'] as const;
 type Sort = (typeof SORTS)[number];

@@ -1,9 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters } from '~/server/db/schema';
-import { requireCapability } from '~/server/utils/auth';
-import { ensureDatabase } from '~/server/utils/db';
-import { adapterCreateSchema, firstZodIssueMessage } from '~/shared/schemas';
+import { adapters } from 'hub:db:schema';
 
 export default defineEventHandler(async (event) => {
 	const user = await requireCapability(event, 'canCreate');

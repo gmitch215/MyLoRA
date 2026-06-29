@@ -1,5 +1,6 @@
 import { and, eq, ne } from 'drizzle-orm';
-import { cloudflareAccounts } from '~/server/db/schema';
+import { db } from 'hub:db';
+import { cloudflareAccounts } from 'hub:db:schema';
 
 export default defineEventHandler(async (event) => {
 	await requireCapability(event, 'canManageAccounts');

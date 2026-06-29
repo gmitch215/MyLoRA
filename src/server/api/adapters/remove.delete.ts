@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { blob } from 'hub:blob';
 import { db } from 'hub:db';
-import { adapters, cloudflareAccounts } from '~/server/db/schema';
+import { adapters, cloudflareAccounts } from 'hub:db:schema';
 import { requireAdapterAccess } from '~/server/utils/auth';
 import { CfUnsupported, deleteFinetune, describeCfError } from '~/server/utils/cloudflare';
 import { decryptToken } from '~/server/utils/crypto';

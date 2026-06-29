@@ -1,10 +1,6 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters, users } from '~/server/db/schema';
-import { requireAdapterAccess } from '~/server/utils/auth';
-import { ensureDatabase } from '~/server/utils/db';
-import { toAdapter } from '~/server/utils/serialize';
-import { adapterUpdateSchema, firstZodIssueMessage } from '~/shared/schemas';
+import { adapters, users } from 'hub:db:schema';
 
 export default defineEventHandler(async (event) => {
 	await ensureDatabase();

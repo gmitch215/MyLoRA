@@ -1,5 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
-import { adapters } from '~/server/db/schema';
+import { db } from 'hub:db';
+import { adapters } from 'hub:db:schema';
 
 function buildMessages(body: any): ChatMessage[] {
 	if (!Array.isArray(body?.messages)) return [];

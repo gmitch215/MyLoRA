@@ -1,11 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters } from '~/server/db/schema';
+import { adapters } from 'hub:db:schema';
 import { ensureDatabase } from '~/server/utils/db';
 
 // GET /adapters/[slug]/install.sh
-// emits a shell script that downloads the adapter's config + weights and registers them on the
-// caller's OWN cloudflare account via their local wrangler auth; we never handle their token
 export default defineEventHandler(async (event) => {
 	await ensureDatabase();
 	const slug = getRouterParam(event, 'slug');

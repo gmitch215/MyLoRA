@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters, cloudflareAccounts } from '~/server/db/schema';
+import { adapters, cloudflareAccounts } from 'hub:db:schema';
 import { requireCapability } from '~/server/utils/auth';
 import { ensureDatabase } from '~/server/utils/db';
 

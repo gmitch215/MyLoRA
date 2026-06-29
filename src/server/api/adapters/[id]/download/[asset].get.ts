@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { blob } from 'hub:blob';
 import { db } from 'hub:db';
-import { adapters, downloads } from '~/server/db/schema';
+import { adapters, downloads } from 'hub:db:schema';
 import { getCurrentUser, hasCapability } from '~/server/utils/auth';
 import { ensureDatabase } from '~/server/utils/db';
 import { getAccess } from '~/server/utils/settings';

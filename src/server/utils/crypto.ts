@@ -1,6 +1,4 @@
-import { kv } from 'hub:kv';
-import type { CloudflareAccount } from '~/server/db/schema';
-import type { PublicCloudflareAccount } from '~/shared/types';
+import type { CloudflareAccount } from 'hub:db:schema';
 
 const KEK_KV_KEY = 'mylora:kek';
 const ENC_CHECK_KV_KEY = 'mylora:enc_check';

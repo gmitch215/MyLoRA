@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { blob } from 'hub:blob';
 import { db } from 'hub:db';
-import { users } from '~/server/db/schema';
+import { users } from 'hub:db:schema';
 import { adminCount, requireAdmin } from '~/server/utils/auth';
 import { ensureDatabase } from '~/server/utils/db';
 

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { users } from '~/server/db/schema';
+import { users } from 'hub:db:schema';
 import { describeDbError, ensureDatabase } from '~/server/utils/db';
 import { toPublicUser } from '~/server/utils/serialize';
 

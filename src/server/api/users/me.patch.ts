@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { users } from '~/server/db/schema';
+import { db } from 'hub:db';
+import { users } from 'hub:db:schema';
 
 export default defineEventHandler(async (event) => {
 	const me = await requireAuthed(event);

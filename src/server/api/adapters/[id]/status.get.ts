@@ -1,10 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { db } from 'hub:db';
-import { kv } from 'hub:kv';
-import { adapters } from '~/server/db/schema';
-import { requireAdapterAccess } from '~/server/utils/auth';
-import { ensureDatabase } from '~/server/utils/db';
-import type { PushJob } from '~/shared/types';
+import { adapters } from 'hub:db:schema';
 
 export default defineEventHandler(async (event) => {
 	await ensureDatabase();

@@ -1,4 +1,4 @@
-import type { Adapter as AdapterRow, User as UserRow } from '~/server/db/schema';
+import type { Adapter as AdapterRow, User as UserRow } from 'hub:db:schema';
 
 export function toPublicUser(row: Partial<UserRow> | null | undefined): PublicUser | null {
 	if (!row || !row.id) return null;

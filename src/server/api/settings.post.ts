@@ -1,12 +1,3 @@
-import { requireManager } from '~/server/utils/auth';
-import {
-	getAllSettings,
-	setJsonSetting,
-	setStringSetting,
-	STRING_SETTING_KEYS
-} from '~/server/utils/settings';
-import { firstZodIssueMessage, settingsSchema } from '~/shared/schemas';
-
 const JSON_KEYS = ['access', 'permissions', 'rateLimits', 'limits', 'features', 'message'] as const;
 
 export default defineEventHandler(async (event) => {

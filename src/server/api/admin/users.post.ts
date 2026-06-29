@@ -1,9 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { users } from '~/server/db/schema';
-import { requireAdmin } from '~/server/utils/auth';
-import { describeDbError, ensureDatabase } from '~/server/utils/db';
-import { firstZodIssueMessage, RESERVED_USERNAMES, userCreateSchema } from '~/shared/schemas';
+import { users } from 'hub:db:schema';
 
 export default defineEventHandler(async (event) => {
 	await requireAdmin(event);

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { blob, ensureBlob } from 'hub:blob';
 import { db } from 'hub:db';
-import { adapters } from '~/server/db/schema';
+import { adapters } from 'hub:db:schema';
 import { requireAdapterAccess } from '~/server/utils/auth';
 import { ensureDatabase } from '~/server/utils/db';
 import { getLimits } from '~/server/utils/settings';

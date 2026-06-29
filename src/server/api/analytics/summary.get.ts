@@ -1,6 +1,6 @@
 import { inArray } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters } from '~/server/db/schema';
+import { adapters } from 'hub:db:schema';
 import {
 	dayRange,
 	daysAgoUTC,

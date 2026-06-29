@@ -1,6 +1,6 @@
 import { desc } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { cloudflareAccounts } from '~/server/db/schema';
+import { cloudflareAccounts } from 'hub:db:schema';
 import { requireCapability } from '~/server/utils/auth';
 import { redactAccount } from '~/server/utils/crypto';
 import { ensureDatabase } from '~/server/utils/db';
