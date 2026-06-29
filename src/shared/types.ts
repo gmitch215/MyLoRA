@@ -3,7 +3,20 @@ import type { Capability, RateTier } from './schemas';
 export type Role = 'administrator' | 'manager' | 'developer';
 export type ModelType = 'mistral' | 'gemma' | 'llama' | 'qwen';
 export type Visibility = 'public' | 'unlisted' | 'private';
-export type AdapterStatus = 'draft' | 'listed' | 'pushing' | 'published' | 'failed' | 'archived';
+export type AdapterStatus =
+	| 'draft'
+	| 'listed'
+	| 'pushing'
+	| 'published'
+	| 'failed'
+	| 'archived'
+	| 'migrated';
+
+// statuses whose adapters can be run in the widget + playground
+export const TESTABLE_STATUSES: AdapterStatus[] = ['published', 'migrated'];
+export function isTestable(status: AdapterStatus): boolean {
+	return TESTABLE_STATUSES.includes(status);
+}
 
 export type PublicUser = {
 	id: string;
@@ -37,6 +50,8 @@ export type Adapter = {
 	tags: string[];
 	examples: AdapterExampleItem[];
 	screenshots: string[];
+	iconName?: string | null;
+	iconColor?: string | null;
 	visibility: Visibility;
 	cfPublic: boolean;
 	accountId?: string | null;
@@ -85,6 +100,7 @@ export type LimitsSettings = {
 	accountBudgetPerMinute: number;
 	inferenceCacheTtl: number;
 	maxOutputTokens: number;
+	maxSystemPromptChars: number;
 };
 
 export type FeatureFlags = { cfGetEnabled: boolean; cfDeleteEnabled: boolean };
