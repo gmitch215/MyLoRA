@@ -80,6 +80,9 @@ export const adapters = sqliteTable(
 		examples: text('examples'),
 		// JSON array of r2 pathnames
 		screenshots: text('screenshots'),
+		// optional iconify id + color shown when there is no screenshot
+		iconName: text('icon_name'),
+		iconColor: text('icon_color'),
 		visibility: text('visibility', { enum: ['public', 'unlisted', 'private'] })
 			.notNull()
 			.default('public'),
@@ -91,9 +94,9 @@ export const adapters = sqliteTable(
 		// name used as the lora param at inference
 		finetuneName: text('finetune_name'),
 		authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
-		// draft -> listed -> pushing -> published -> failed/archived
+		// draft -> listed -> pushing -> published -> failed/archived; 'migrated' = imported from a cloudflare account
 		status: text('status', {
-			enum: ['draft', 'listed', 'pushing', 'published', 'failed', 'archived']
+			enum: ['draft', 'listed', 'pushing', 'published', 'failed', 'archived', 'migrated']
 		})
 			.notNull()
 			.default('draft'),
