@@ -5,7 +5,7 @@
 			collapsible
 			:ui="{ footer: 'border-t border-default' }"
 		>
-			<template #header>
+			<template #header="{ collapsed }">
 				<NuxtLink
 					to="/"
 					class="flex items-center gap-2 font-semibold"
@@ -13,27 +13,39 @@
 					<NuxtImg
 						src="/favicon.png"
 						alt="Logo"
-						class="w-7 h-7"
+						class="w-7 h-7 shrink-0"
 					/>
-					<span class="truncate">{{ settings.name || $config.public.name }}</span>
+					<span
+						v-if="!collapsed"
+						class="truncate"
+						>{{ settings.name || $config.public.name }}</span
+					>
 				</NuxtLink>
 			</template>
 
-			<SearchButton class="mb-2 w-full justify-start" />
+			<template #default="{ collapsed }">
+				<SearchButton
+					:collapsed="collapsed"
+					:class="['mb-2', collapsed ? '' : 'w-full justify-start']"
+				/>
 
-			<UNavigationMenu
-				orientation="vertical"
-				:items="navItems"
-			/>
+				<UNavigationMenu
+					orientation="vertical"
+					:items="navItems"
+					:collapsed="collapsed"
+					tooltip
+				/>
+			</template>
 
-			<template #footer>
+			<template #footer="{ collapsed }">
 				<UButton
 					icon="mdi:arrow-left"
 					to="/"
 					color="neutral"
 					variant="ghost"
-					label="Back to Site"
-					block
+					:label="collapsed ? undefined : 'Back to Site'"
+					:square="collapsed"
+					:block="!collapsed"
 				/>
 			</template>
 		</UDashboardSidebar>
