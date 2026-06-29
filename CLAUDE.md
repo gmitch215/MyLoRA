@@ -31,7 +31,8 @@ aligned with the existing Nuxt UI v4 design language.
 
 - `bun run dev` / `bun run dev:test` (test env + `MYLORA_MOCK_CF=1`)
 - `bun run build` - production build (cloudflare_module preset)
-- `bun run test` / `bun run test:coverage` - Playwright E2E (mocks Cloudflare via `MYLORA_MOCK_CF`)
+- `bun run test` - Playwright E2E: main suite (8787) then the isolated setup flow; `test:main` /
+  `test:setup` run each half alone, `test:coverage` is main-only
 - `bun run prettier:check`
 
 ## Testing notes
@@ -41,3 +42,7 @@ aligned with the existing Nuxt UI v4 design language.
 - UI specs use `page.goto(url, { waitUntil: 'domcontentloaded' })` + `waitForHydration` (never
   `networkidle` - Vite HMR keeps the socket open in dev).
 - API specs use the `request` fixture; `loginViaApi` skips redundant logins to avoid the auth limiter.
+- `tests/setup.spec.ts` is isolated: `dev:setup` boots a fresh, unseeded server on 8788 (its own
+  `.data-setup` + `.nuxt-setup` + kv namespace, no `NUXT_PASSWORD`, wiped each boot) so the genuine
+  first-run flow is reproducible. It runs via `bun run test:setup` (`PLAYWRIGHT_SETUP=1` switches the
+  single `playwright.config.ts` to the setup project), sequentially after the main run, never alongside dev:test.
