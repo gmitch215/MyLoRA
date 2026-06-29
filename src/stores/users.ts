@@ -1,6 +1,3 @@
-import type { AdminUser } from '~/shared/types';
-
-// admin user crud
 export const useUsersStore = defineStore('users', () => {
 	const list = ref<AdminUser[]>([]);
 	const loading = ref(false);

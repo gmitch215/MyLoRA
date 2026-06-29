@@ -1,8 +1,3 @@
-import { ADMIN_CAPABILITY, capabilityFor } from '~/shared/defaults';
-import type { Capability } from '~/shared/schemas';
-import type { PublicUser, Role } from '~/shared/types';
-
-// session-backed auth store; capability getters resolve against the settings matrix
 export const useAuthStore = defineStore('auth', () => {
 	const session = useUserSession();
 

@@ -1,19 +1,3 @@
-import {
-	DEFAULT_ACCESS,
-	DEFAULT_FEATURES,
-	DEFAULT_LIMITS,
-	DEFAULT_PERMISSIONS,
-	DEFAULT_RATE_LIMITS
-} from '~/shared/defaults';
-import type {
-	AccessSettings,
-	FeatureFlags,
-	LimitsSettings,
-	PermissionMatrix,
-	RateLimits
-} from '~/shared/types';
-
-// full settings doc; branding/social plus access/permissions/rateLimits/limits/features
 export type FullSettings = {
 	name?: string;
 	description?: string;
