@@ -19,17 +19,26 @@ export default defineEventHandler(async (event) => {
 	const { id, ...data } = parsed.data;
 	await requireAdapterAccess(event, id, 'edit');
 
-	// once on cloudflare, base model / model type / rank are baked into the pushed config; editing
-	// them would desync the row from what is live, so reject those edits while pushing/published
 	const current = (
-		await db.select({ status: adapters.status }).from(adapters).where(eq(adapters.id, id)).limit(1)
+		await db
+			.select({
+				status: adapters.status,
+				baseModel: adapters.baseModel,
+				modelType: adapters.modelType,
+				rank: adapters.rank
+			})
+			.from(adapters)
+			.where(eq(adapters.id, id))
+			.limit(1)
 	)[0];
 	if (!current) throw createError({ statusCode: 404, statusMessage: 'Adapter not found' });
 	const locked = current.status === 'pushing' || current.status === 'published';
 	const changesModel =
-		(data.baseModel !== undefined && data.baseModel !== '') ||
-		data.modelType !== undefined ||
-		data.rank !== undefined;
+		(data.baseModel !== undefined &&
+			data.baseModel !== '' &&
+			data.baseModel !== current.baseModel) ||
+		(data.modelType !== undefined && data.modelType !== current.modelType) ||
+		(data.rank !== undefined && data.rank !== current.rank);
 	if (locked && changesModel) {
 		throw createError({
 			statusCode: 409,
@@ -47,6 +56,8 @@ export default defineEventHandler(async (event) => {
 	if (data.promptTemplate !== undefined) patch.promptTemplate = data.promptTemplate || null;
 	if (data.tags !== undefined) patch.tags = data.tags.length ? data.tags.join(',') : null;
 	if (data.examples !== undefined) patch.examples = JSON.stringify(data.examples);
+	if (data.iconName !== undefined) patch.iconName = data.iconName || null;
+	if (data.iconColor !== undefined) patch.iconColor = data.iconColor || null;
 	if (data.visibility !== undefined) patch.visibility = data.visibility;
 
 	// keep slug globally unique if it changed

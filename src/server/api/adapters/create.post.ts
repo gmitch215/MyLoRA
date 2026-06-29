@@ -48,6 +48,8 @@ export default defineEventHandler(async (event) => {
 		tags,
 		examples: JSON.stringify(data.examples ?? []),
 		screenshots: '[]',
+		iconName: data.iconName || null,
+		iconColor: data.iconColor || null,
 		visibility: data.visibility,
 		authorId: user.id,
 		status: 'draft'
