@@ -3,6 +3,9 @@
 		<NuxtLayout>
 			<NuxtPage />
 		</NuxtLayout>
+		<ClientOnly>
+			<AppCommandPalette />
+		</ClientOnly>
 	</UApp>
 </template>
 
@@ -30,7 +33,11 @@ useSeoMeta({
 	ogDescription: description,
 	ogLocale: 'en_US',
 	ogType: 'website',
-	themeColor: () => settings.value.themeColor || config.public.themeColor || '#6d28d9',
+	// the browser tint meta needs a real color; preset tokens fall back to the default hex
+	themeColor: () =>
+		isCustomColor(settings.value.themeColor)
+			? settings.value.themeColor!
+			: config.public.themeColor || '#6d28d9',
 	ogSiteName: name,
 	twitterTitle: name,
 	twitterDescription: description,
