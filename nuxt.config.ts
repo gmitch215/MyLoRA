@@ -3,16 +3,63 @@ import { defineNuxtConfig } from 'nuxt/config';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineNuxtConfig({
+	...(process.env.NUXT_BUILD_DIR ? { buildDir: process.env.NUXT_BUILD_DIR } : {}),
 	site: {
-		url: process.env.NUXT_PUBLIC_SITE_URL || 'https://nuxtpress.pages.dev'
+		url: process.env.NUXT_PUBLIC_SITE_URL || 'https://mylora.pages.dev'
+	},
+	runtimeConfig: {
+		password: process.env.NUXT_PASSWORD || 'password',
+		session: {
+			password:
+				process.env.NUXT_SESSION_PASSWORD ||
+				(process.env.NODE_ENV === 'production'
+					? ''
+					: 'dev_only_session_secret_at_least_32_chars_long_xx'),
+			cookie: {
+				sameSite: 'lax',
+				httpOnly: true,
+				path: '/',
+				secure: process.env.NODE_ENV === 'production'
+			}
+		},
+		analyticsSalt: process.env.NUXT_ANALYTICS_SALT || 'dev_analytics_salt_change_me_please',
+		encryptionKey: process.env.NUXT_ENCRYPTION_KEY || '',
+		mockCf: process.env.MYLORA_MOCK_CF === '1',
+		cf: {
+			accountId: process.env.NUXT_CF_ACCOUNT_ID || '',
+			apiToken: process.env.NUXT_CF_API_TOKEN || ''
+		},
+		public: {
+			site_url: process.env.NUXT_PUBLIC_SITE_URL,
+			name: process.env.NUXT_PUBLIC_NAME || 'MyLoRA',
+			description: process.env.NUXT_PUBLIC_DESCRIPTION || 'A self-hostable LoRA adapter registry',
+			author: process.env.NUXT_PUBLIC_AUTHOR || 'Gregory Mitchell',
+			themeColor: process.env.NUXT_PUBLIC_THEME_COLOR || '#6d28d9',
+			favicon: process.env.NUXT_PUBLIC_FAVICON || '/_favicon.ico',
+			faviconPng: process.env.NUXT_PUBLIC_FAVICON_PNG || '/_favicon.png',
+			website: process.env.NUXT_PUBLIC_WEBSITE || '',
+			github: process.env.NUXT_PUBLIC_GITHUB || '',
+			instagram: process.env.NUXT_PUBLIC_INSTAGRAM || '',
+			twitter: process.env.NUXT_PUBLIC_TWITTER || '',
+			patreon: process.env.NUXT_PUBLIC_PATREON || '',
+			linkedin: process.env.NUXT_PUBLIC_LINKEDIN || '',
+			discord: process.env.NUXT_PUBLIC_DISCORD || '',
+			supportEmail: process.env.NUXT_PUBLIC_SUPPORT_EMAIL || ''
+		}
 	},
 	ssr: true,
 	compatibilityDate: '2025-12-13',
-	devtools: { enabled: process.env.NODE_ENV === 'development' },
+	devtools: {
+		enabled: process.env.NODE_ENV === 'development' && process.env.MYLORA_MOCK_CF !== '1'
+	},
 	srcDir: 'src',
 	serverDir: 'src/server',
+	imports: {
+		dirs: ['shared']
+	},
 	css: ['~/assets/css/main.css'],
 	vite: {
+		cacheDir: process.env.NUXT_VITE_CACHE || undefined,
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		plugins: [tailwindcss() as any],
 		css: {
@@ -24,10 +71,8 @@ export default defineNuxtConfig({
 		},
 		optimizeDeps: {
 			include: [
-				'prosemirror-state',
-				'prosemirror-view',
-				'prosemirror-model',
-				'prosemirror-transform',
+				'highlight.js',
+				'marked',
 				'zod',
 				'@vue/devtools-core',
 				'@vue/devtools-kit',
@@ -37,8 +82,11 @@ export default defineNuxtConfig({
 		}
 	},
 	hub: {
+		// local storage roots are env-overridable so an isolated dev server (setup E2E) gets its own
+		// db/blob/cache + kv namespace; defaults match nuxthub's built-in `.data` layout
+		dir: process.env.NUXT_HUB_DIR || '.data',
 		cache: true,
-		kv: true,
+		kv: process.env.NUXT_HUB_KV_BASE ? { base: process.env.NUXT_HUB_KV_BASE } : true,
 		blob: true,
 		db: 'sqlite'
 	},
@@ -52,6 +100,9 @@ export default defineNuxtConfig({
 		}
 	},
 	nitro: {
+		imports: {
+			dirs: ['src/shared']
+		},
 		prerender: {
 			routes: ['/sitemap.xml'],
 			ignore: ['/api/**']
@@ -73,6 +124,7 @@ export default defineNuxtConfig({
 		'@nuxt/image',
 		'@nuxt/hints',
 		'@pinia/nuxt',
+		'@vueuse/nuxt',
 		[
 			'@nuxtjs/google-fonts',
 			{
@@ -99,7 +151,7 @@ export default defineNuxtConfig({
 			'@codecov/nuxt-plugin',
 			{
 				enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
-				bundleName: 'nuxtpress',
+				bundleName: 'mylora',
 				uploadToken: process.env.CODECOV_TOKEN
 			}
 		]
