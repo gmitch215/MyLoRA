@@ -1,8 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import type { H3Event } from 'h3';
 import { db } from 'hub:db';
-import { adapters, cloudflareAccounts } from '~/server/db/schema';
-import type { Adapter, InferenceResult } from '~/shared/types';
+import { adapters, cloudflareAccounts } from 'hub:db:schema';
 import { describeCfError, isMockCf } from './cloudflare';
 import { decryptToken } from './crypto';
 
@@ -16,11 +15,6 @@ type ResolvedTarget = {
 	token: string | null;
 	isDefaultAccount: boolean;
 };
-
-// rough token estimate when cloudflare omits usage
-export function estimateTokens(text: string): number {
-	return Math.ceil((text || '').length / 4);
-}
 
 function aiBinding(event: H3Event): any {
 	const fromCtx = (event.context as any)?.cloudflare?.env?.AI;
@@ -224,10 +218,7 @@ export async function runInferenceStream(
 	return res.body;
 }
 
-// low-cost summarization model used to auto-compact long playground conversations
 export const SUMMARY_MODEL = '@cf/facebook/bart-large-cnn';
-
-// summarize free text via the cloudflare summarization model (native binding or per-account rest)
 export async function runSummary(
 	event: H3Event,
 	text: string,
