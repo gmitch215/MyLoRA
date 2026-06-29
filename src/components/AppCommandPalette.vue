@@ -10,6 +10,7 @@
 				:loading="status === 'pending'"
 				placeholder="Search adapters, run a command, or jump anywhere..."
 				close
+				@update:model-value="hide"
 				@update:open="open = $event"
 			>
 				<template #empty>
@@ -33,11 +34,25 @@
 </template>
 
 <script setup lang="ts">
-const { open, toggle, show } = useCommandPalette();
+const { open, toggle, show, hide } = useCommandPalette();
 const search = ref('');
 const auth = useAuthStore();
 const colorMode = useColorMode();
 const adaptersStore = useAdaptersStore();
+const route = useRoute();
+const router = useRouter();
+
+watch(
+	() => route.fullPath,
+	() => {
+		if (open.value) open.value = false;
+	}
+);
+
+// clear the search box each time the palette closes so it reopens fresh
+watch(open, (isOpen) => {
+	if (!isOpen) search.value = '';
+});
 
 // lightweight client-side index of the public adapter feed (shared cache with the grid)
 const { data, status } = await useFetch<{ items: Adapter[] }>('/api/adapters/list', {
@@ -121,7 +136,7 @@ const actionItems = computed(() => {
 			label: 'New Adapter',
 			icon: 'mdi:plus',
 			kbds: ['n'],
-			onSelect: () => navigateTo('/dashboard?new=1')
+			onSelect: () => router.push('/dashboard?new=1')
 		});
 	items.push({
 		id: 'theme',
@@ -147,7 +162,7 @@ const actionItems = computed(() => {
 			id: 'login',
 			label: 'Log In',
 			icon: 'mdi:login',
-			onSelect: () => navigateTo('/?login=1')
+			onSelect: () => router.push('/?login=1')
 		});
 	return items;
 });
@@ -185,7 +200,7 @@ const groups = computed(() => {
 });
 
 function goSearch() {
-	navigateTo({ path: '/', query: { q: search.value } });
+	router.push({ path: '/', query: { q: search.value } });
 	open.value = false;
 }
 
@@ -194,14 +209,14 @@ defineShortcuts({
 	ctrl_k: () => toggle(),
 	'/': () => show(),
 	n: () => {
-		if (auth.can('canCreate')) navigateTo('/dashboard?new=1');
+		if (auth.can('canCreate')) router.push('/dashboard?new=1');
 	},
-	'g-h': () => navigateTo('/'),
-	'g-t': () => navigateTo('/tags'),
-	'g-p': () => navigateTo('/playground'),
-	'g-d': () => navigateTo('/dashboard'),
-	'g-s': () => navigateTo('/dashboard/settings'),
-	'g-u': () => navigateTo('/admin/users'),
-	'g-a': () => navigateTo('/dashboard/analytics')
+	'g-h': () => router.push('/'),
+	'g-t': () => router.push('/tags'),
+	'g-p': () => router.push('/playground'),
+	'g-d': () => router.push('/dashboard'),
+	'g-s': () => router.push('/dashboard/settings'),
+	'g-u': () => router.push('/admin/users'),
+	'g-a': () => router.push('/dashboard/analytics')
 });
 </script>
