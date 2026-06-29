@@ -15,8 +15,15 @@
 			decoding="async"
 			@error="onError"
 		/>
+		<UIcon
+			v-else-if="icon"
+			:name="icon"
+			:class="iconClass"
+			:style="{ color: resolveColorVar(iconColor, 'var(--ui-text-toned)') }"
+			aria-hidden="true"
+		/>
 		<span
-			v-if="!src || failed"
+			v-else
 			class="text-muted font-medium select-none"
 			:class="initialClass"
 			aria-hidden="true"
@@ -27,15 +34,18 @@
 </template>
 
 <script setup lang="ts">
+import { resolveColorVar } from '~/shared/colors';
 import type { PublicUser } from '~/shared/types';
 
-// accepts a user or a raw pathname; renders an image from /avatars/{pathname} or initials
+// accepts a user or a raw pathname; renders an image, then an iconify icon, then initials
 const props = withDefaults(
 	defineProps<{
 		user?: PublicUser | null;
 		pathname?: string | null;
 		displayName?: string;
-		size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+		icon?: string | null;
+		iconColor?: string | null;
+		size?: '2xs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 		title?: string;
 	}>(),
 	{ size: 'md' }
@@ -43,7 +53,6 @@ const props = withDefaults(
 
 const failed = ref(false);
 
-// resolve from explicit pathname or the user's avatarPathname
 const resolvedPathname = computed(() => props.pathname ?? props.user?.avatarPathname ?? null);
 const displayName = computed(() => props.displayName ?? props.user?.displayName ?? '');
 
@@ -61,11 +70,24 @@ const src = computed(() => {
 const sizeClass = computed(
 	() =>
 		({
+			'2xs': 'h-5 w-5 text-[10px]',
 			xs: 'h-6 w-6 text-xs',
 			sm: 'h-8 w-8 text-sm',
 			md: 'h-10 w-10 text-base',
 			lg: 'h-16 w-16 text-xl',
 			xl: 'h-24 w-24 text-3xl'
+		})[props.size]
+);
+
+const iconClass = computed(
+	() =>
+		({
+			'2xs': 'size-3',
+			xs: 'size-4',
+			sm: 'size-5',
+			md: 'size-6',
+			lg: 'size-9',
+			xl: 'size-14'
 		})[props.size]
 );
 
