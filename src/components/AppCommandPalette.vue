@@ -33,8 +33,6 @@
 </template>
 
 <script setup lang="ts">
-import type { Adapter } from '~/shared/types';
-
 const { open, toggle, show } = useCommandPalette();
 const search = ref('');
 const auth = useAuthStore();

@@ -1,5 +1,5 @@
 <template>
-	<div class="overflow-x-auto rounded border border-default">
+	<div class="scrollbar-hide overflow-x-auto rounded border border-default">
 		<table class="min-w-full text-sm">
 			<thead class="bg-elevated/40 text-muted">
 				<tr>
@@ -57,9 +57,6 @@
 </template>
 
 <script setup lang="ts">
-import type { Capability } from '~/shared/schemas';
-import type { PermissionMatrix } from '~/shared/types';
-
 const props = defineProps<{ modelValue: PermissionMatrix }>();
 const emit = defineEmits<{ 'update:modelValue': [value: PermissionMatrix] }>();
 

@@ -75,22 +75,12 @@
 			<UFormField
 				label="Theme Color"
 				name="themeColor"
-				help="Hex color code (e.g., #3B82F6)"
+				help="Pick a preset color or a custom hex (e.g., #3B82F6)"
 			>
-				<div class="flex gap-2 items-center">
-					<UInput
-						v-model="state.themeColor"
-						placeholder="#3B82F6"
-						class="w-40"
-						:disabled="loading"
-					/>
-					<input
-						v-model="state.themeColor"
-						type="color"
-						class="h-10 w-20 rounded border border-default cursor-pointer"
-						:disabled="loading"
-					/>
-				</div>
+				<ColorPicker
+					v-model="state.themeColor"
+					clearable
+				/>
 			</UFormField>
 
 			<UFormField
@@ -328,7 +318,7 @@
 				</UFormField>
 				<UFormField
 					label="Account Budget / Minute"
-					help="Coarse per-account request cap"
+					help="Coarse Per-Account Request Cap"
 				>
 					<UInput
 						v-model.number="limits.accountBudgetPerMinute"
@@ -441,22 +431,6 @@
 </template>
 
 <script setup lang="ts">
-import {
-	DEFAULT_ACCESS,
-	DEFAULT_FEATURES,
-	DEFAULT_LIMITS,
-	DEFAULT_PERMISSIONS,
-	DEFAULT_RATE_LIMITS
-} from '~/shared/defaults';
-import { CF_MAX_RANK, CF_MAX_WEIGHTS_BYTES, settingsSchema, VISIBILITIES } from '~/shared/schemas';
-import type {
-	AccessSettings,
-	FeatureFlags,
-	LimitsSettings,
-	PermissionMatrix,
-	RateLimits
-} from '~/shared/types';
-
 const store = useSettingsStore();
 const toast = useToast();
 

@@ -1,12 +1,11 @@
 <template>
 	<div class="space-y-6">
-		<!-- public/anonymous tier; clamped to PUBLIC_LIMIT_RANGES -->
 		<section class="space-y-3">
 			<h4 class="text-sm font-semibold text-highlighted">Public (anonymous)</h4>
 			<div class="grid gap-3 sm:grid-cols-3">
 				<UFormField
-					label="Prompts / hour"
-					:help="`${ranges.promptsPerHour.min}-${ranges.promptsPerHour.max}`"
+					label="Prompts / Hour"
+					:help="`How many prompts to allow per hour (${ranges.promptsPerHour.min}-${ranges.promptsPerHour.max})`"
 				>
 					<UInput
 						:model-value="model.public.promptsPerHour"
@@ -19,7 +18,7 @@
 				</UFormField>
 				<UFormField
 					label="Output Tokens / Hour"
-					:help="`${ranges.outputTokensPerHour.min}-${ranges.outputTokensPerHour.max}`"
+					:help="`How many output tokens to allow per hour (${ranges.outputTokensPerHour.min}-${ranges.outputTokensPerHour.max})`"
 				>
 					<UInput
 						:model-value="model.public.outputTokensPerHour"
@@ -32,7 +31,7 @@
 				</UFormField>
 				<UFormField
 					label="Precedence"
-					help="Primary gate + surfaced reset"
+					help="What to prioritize when the public rate limit is exceeded"
 				>
 					<USelect
 						:model-value="model.public.precedence"
@@ -45,26 +44,34 @@
 			</div>
 		</section>
 
-		<!-- developer/playground tier; 0 = unlimited, no upper bound -->
 		<section class="space-y-3">
-			<h4 class="text-sm font-semibold text-highlighted">Developer / playground</h4>
-			<p class="text-xs text-muted">0 = unlimited</p>
+			<h4 class="text-sm font-semibold text-highlighted">Developer / Playground</h4>
 			<div class="grid gap-3 sm:grid-cols-3">
-				<UFormField label="Prompts / hour">
+				<UFormField
+					label="Prompts / Hour"
+					help="0 = unlimited"
+				>
 					<UInput
 						:model-value="model.developer.promptsPerHour"
 						type="number"
 						:min="0"
 						class="w-full"
+						color="error"
+						highlight
 						@update:model-value="setDeveloper('promptsPerHour', $event)"
 					/>
 				</UFormField>
-				<UFormField label="Output Tokens / Hour">
+				<UFormField
+					label="Output Tokens / Hour"
+					help="0 = unlimited"
+				>
 					<UInput
 						:model-value="model.developer.outputTokensPerHour"
 						type="number"
 						:min="0"
 						class="w-full"
+						color="error"
+						highlight
 						@update:model-value="setDeveloper('outputTokensPerHour', $event)"
 					/>
 				</UFormField>
@@ -74,6 +81,8 @@
 						:items="precedenceItems"
 						value-key="value"
 						class="w-full"
+						color="error"
+						highlight
 						@update:model-value="setPrecedence('developer', $event)"
 					/>
 				</UFormField>
@@ -83,9 +92,6 @@
 </template>
 
 <script setup lang="ts">
-import { PUBLIC_LIMIT_RANGES, clampPublicLimit } from '~/shared/defaults';
-import type { RateLimits } from '~/shared/types';
-
 const props = defineProps<{ modelValue: RateLimits }>();
 const emit = defineEmits<{ 'update:modelValue': [value: RateLimits] }>();
 

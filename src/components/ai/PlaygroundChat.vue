@@ -198,8 +198,6 @@
 </template>
 
 <script setup lang="ts">
-import { contextWindowFor, estimateTokens } from '~/shared/schemas';
-import { isTestable, type Adapter } from '~/shared/types';
 import type { ChatSession, PathNode } from '~/stores/inference';
 
 type ModelInfo = { model: string; modelType: string; contextWindow?: number };

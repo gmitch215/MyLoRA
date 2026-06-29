@@ -67,8 +67,6 @@
 </template>
 
 <script setup lang="ts">
-import { isCustomColor, isNuxtColor, NUXT_COLORS, resolveColorVar } from '~/shared/colors';
-
 const props = withDefaults(
 	defineProps<{ modelValue?: string | null; presets?: readonly string[]; clearable?: boolean }>(),
 	{ presets: () => NUXT_COLORS, clearable: false }

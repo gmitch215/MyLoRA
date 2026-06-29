@@ -43,7 +43,7 @@
 				<NuxtLink
 					v-if="settings.supportEmail"
 					:to="`mailto:${settings.supportEmail}`"
-					aria-label="Support email"
+					aria-label="Support Email"
 				>
 					<UIcon
 						name="mdi:email-outline"

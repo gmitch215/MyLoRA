@@ -34,9 +34,6 @@
 </template>
 
 <script setup lang="ts">
-import { resolveColorVar } from '~/shared/colors';
-import type { PublicUser } from '~/shared/types';
-
 // accepts a user or a raw pathname; renders an image, then an iconify icon, then initials
 const props = withDefaults(
 	defineProps<{
