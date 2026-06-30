@@ -2,6 +2,8 @@
 .output
 .data
 .data-setup
+.data.polluted.*
+.data.old.*
 .nuxt
 .nuxt-setup
 .nitro
@@ -23,6 +25,10 @@ logs
 .idea
 
 .env.local
+
+# wrangler dev local secrets (NUXT_PASSWORD / session / encryption key)
+.dev.vars
+.dev.vars.*
 
 # Playwright + coverage
 playwright-report
