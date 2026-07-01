@@ -179,6 +179,7 @@ const auth = useAuthStore();
 const { loggedIn } = storeToRefs(auth);
 const config = useRuntimeConfig();
 const route = useRoute();
+const router = useRouter();
 
 const loginOpen = ref(false);
 
@@ -190,6 +191,15 @@ watch(
 	},
 	{ immediate: true }
 );
+
+// clear the ?login marker once the modal closes,
+watch(loginOpen, (open) => {
+	if (!open && route.query.login != null) {
+		const query = { ...route.query };
+		delete query.login;
+		router.replace({ query });
+	}
+});
 
 const themeColorStyle = computed(() => {
 	const color = settings.value.themeColor || config.public.themeColor;
