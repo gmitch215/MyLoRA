@@ -78,7 +78,7 @@ over SSH - provision, train, verify, sync back, and optionally publish - with no
 
 If you used this repository as a template and want to pull updates from the original template repository, you can add the template as a remote and merge updates into your repository. The following snippet shows the minimal commands you may use.
 
-```
+```sh
 # one time, in your repo root, to add the template as a remote
 git remote add template https://github.com/gmitch215/MyLoRA
 
