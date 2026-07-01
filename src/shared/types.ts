@@ -1,5 +1,10 @@
 import type { Capability, RateTier } from './schemas';
 
+// read-your-writes marker that setup finished; set by the client + server the moment an admin
+// exists, honored by /api/setup/status so a refresh never bounces back to /setup while a d1 read
+// replica or kv edge is still catching up after the insert
+export const SETUP_COOKIE = 'mylora_setup';
+
 export type Role = 'administrator' | 'manager' | 'developer';
 export type ModelType = 'mistral' | 'gemma' | 'llama' | 'qwen';
 export type Visibility = 'public' | 'unlisted' | 'private';

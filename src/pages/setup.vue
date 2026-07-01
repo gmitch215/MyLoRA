@@ -248,6 +248,13 @@ const errorDetails = ref('');
 const session = useUserSession();
 const toast = useToast();
 
+// read-your-writes marker so a refresh right after setup never bounces back here (see status.get)
+const setupCookie = useCookie(SETUP_COOKIE, {
+	path: '/',
+	maxAge: 60 * 60 * 24 * 365,
+	sameSite: 'lax'
+});
+
 // assemble the optional settings payload from the form state
 function buildSettings() {
 	const permissions = {
@@ -323,6 +330,7 @@ async function onSubmit() {
 			icon: 'mdi:rocket-launch',
 			color: 'success'
 		});
+		setupCookie.value = '1';
 		status.value = {
 			needsSetup: false,
 			hasLegacyPassword: status.value?.hasLegacyPassword ?? false,
@@ -335,6 +343,24 @@ async function onSubmit() {
 		}
 		await navigateTo('/');
 	} catch (e: any) {
+		// 409 = an admin already exists (or a d1 replica lagged the insert-verify); setup IS done, so
+		// stop looping - mark it locally and send them to log in instead of stranding them here
+		if (e?.statusCode === 409 || e?.data?.statusCode === 409) {
+			setupCookie.value = '1';
+			status.value = {
+				needsSetup: false,
+				hasLegacyPassword: status.value?.hasLegacyPassword ?? false,
+				userCount: Math.max(1, status.value?.userCount ?? 1)
+			};
+			toast.add({
+				title: 'Setup Already Completed',
+				description: 'An administrator already exists. Please log in.',
+				icon: 'mdi:information',
+				color: 'info'
+			});
+			await navigateTo('/?login=1');
+			return;
+		}
 		const issues = e?.data?.issues as { path: PropertyKey[]; message?: string }[] | undefined;
 		const primary = issues
 			? firstZodIssueMessage(issues, e?.data?.statusMessage || 'Setup failed')

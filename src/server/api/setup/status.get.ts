@@ -6,7 +6,7 @@ import {
 	userCount
 } from '~/server/utils/db';
 
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
 	const cfg = useRuntimeConfig();
 	const hasLegacyPassword = Boolean(cfg.password) && cfg.password !== 'password';
 	try {
@@ -18,8 +18,10 @@ export default defineEventHandler(async () => {
 		} catch (kvError) {
 			console.warn('setup flag read failed:', describeDbError(kvError));
 		}
-		// trust either D1 (authoritative) or the KV flag (covers D1 replica lag right after INSERT)
-		const needsSetup = count === 0 && !flagged;
+		// this browser already finished setup; survives d1/kv read lag right after the insert
+		const sealed = Boolean(getCookie(event, SETUP_COOKIE));
+		// needs setup only when every signal agrees it is undone: no users, no kv flag, no cookie
+		const needsSetup = count === 0 && !flagged && !sealed;
 		return { needsSetup, hasLegacyPassword, userCount: count };
 	} catch (error) {
 		console.error('setup status failed:', describeDbError(error));
