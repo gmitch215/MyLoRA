@@ -2,7 +2,13 @@
 	<div class="space-y-1">
 		<div class="flex items-center justify-between text-xs">
 			<span class="flex items-center gap-1.5 text-muted">
+				<AppSpinner
+					v-if="isUploading"
+					size="md"
+					class="text-primary"
+				/>
 				<UIcon
+					v-else
 					:name="stateIcon"
 					:class="stateColor"
 					class="size-4"
@@ -31,11 +37,14 @@ const props = withDefaults(
 	{ progress: 0, state: 'idle' }
 );
 
+// uploading is the only spinning state
+const isUploading = computed(() => props.state === 'uploading');
+
 const stateIcon = computed(
 	() =>
 		({
 			idle: 'mdi:tray-arrow-up',
-			uploading: 'mdi:loading',
+			uploading: 'i-lucide-loader-circle',
 			done: 'mdi:check-circle',
 			error: 'mdi:alert-circle'
 		})[props.state] ?? 'mdi:tray-arrow-up'
