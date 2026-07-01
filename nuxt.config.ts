@@ -82,8 +82,6 @@ export default defineNuxtConfig({
 		}
 	},
 	hub: {
-		// local storage roots are env-overridable so an isolated dev server (setup E2E) gets its own
-		// db/blob/cache + kv namespace; defaults match nuxthub's built-in `.data` layout
 		dir: process.env.NUXT_HUB_DIR || '.data',
 		cache: true,
 		kv: process.env.NUXT_HUB_KV_BASE ? { base: process.env.NUXT_HUB_KV_BASE } : true,
@@ -92,7 +90,7 @@ export default defineNuxtConfig({
 	},
 	$production: {
 		nitro: {
-			preset: 'cloudflare_module',
+			preset: 'cloudflare-durable',
 			cloudflare: {
 				deployConfig: true,
 				nodeCompat: true
