@@ -84,7 +84,11 @@ export default defineConfig({
 		: {
 				// coverage runs against a production build + node preview (fast, stable, source-mapped);
 				// the normal lane uses the dev server. build:e2e runs first via the test:coverage script.
-				command: COVERAGE ? 'bun run preview:e2e' : 'bun run dev:test',
+				// invoke node directly (not `bun run`) so playwright's SIGTERM reaches the node process
+				// and NODE_V8_COVERAGE flushes server coverage on shutdown.
+				command: COVERAGE
+					? 'NODE_ENV=test PORT=8787 NITRO_PORT=8787 NODE_V8_COVERAGE=.coverage/server-raw node --env-file=.config/test.env tests/e2e/preview-e2e.mjs'
+					: 'bun run dev:test',
 				url: BASE_URL,
 				reuseExistingServer: !isCI,
 				timeout: 240_000,

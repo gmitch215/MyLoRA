@@ -35,6 +35,7 @@ playwright-report
 playwright-results
 test-results
 coverage
+.coverage
 
 # Weights + Python
 weights

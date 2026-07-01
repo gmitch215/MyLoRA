@@ -13,16 +13,31 @@ comment:
   layout: 'condensed_header, condensed_files, condensed_footer'
   require_changes: true
 
+flag_management:
+  default_rules:
+    carryforward: true
+  individual_flags:
+    - name: unit
+      paths:
+        - src/
+    - name: e2e-mocked
+      paths:
+        - src/
+
 ignore:
   - 'tests/**/*'
   - 'playwright-report/**/*'
   - 'playwright-results/**/*'
   - 'coverage/**/*'
+  - '.coverage/**/*'
   - '**/*.spec.ts'
+  - '**/*.test.ts'
   - 'playwright.config.ts'
+  - 'vitest.config.ts'
   - 'nuxt.config.ts'
   - 'wrangler.jsonc'
   - 'public/**/*'
   - '.nuxt/**/*'
   - '.output/**/*'
   - 'migrations/**/*'
+  - 'src/server/db/**/*'

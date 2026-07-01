@@ -6,7 +6,7 @@ const E2E_BUILD = process.env.MYLORA_E2E_BUILD === '1';
 
 export default defineNuxtConfig({
 	...(process.env.NUXT_BUILD_DIR ? { buildDir: process.env.NUXT_BUILD_DIR } : {}),
-	...(E2E_BUILD ? { sourcemap: { client: true, server: false } } : {}),
+	...(E2E_BUILD ? { sourcemap: { client: true, server: true } } : {}),
 	site: {
 		url: process.env.NUXT_PUBLIC_SITE_URL || 'https://mylora.pages.dev'
 	},
