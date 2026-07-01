@@ -21,6 +21,17 @@ test.describe('setup first-run flow', () => {
 		expect(s.userCount).toBe(0);
 	});
 
+	test('status honors the setup cookie even before an admin exists (deploy loop regression)', async ({
+		request
+	}) => {
+		// the deploy loop: a d1 read replica / kv edge lags right after the insert so userCount reads 0,
+		// and status must still trust the read-your-writes cookie or it bounces the user back to /setup
+		const res = await request.get('/api/setup/status', { headers: { cookie: 'mylora_setup=1' } });
+		const s = await res.json();
+		expect(s.needsSetup).toBe(false);
+		expect(s.userCount).toBe(0);
+	});
+
 	test('an un-set-up instance forces every route to /setup', async ({ page }) => {
 		await page.goto('/', { waitUntil: 'domcontentloaded' });
 		await expect(page).toHaveURL(/\/setup$/);
@@ -126,6 +137,14 @@ test.describe('setup first-run flow', () => {
 			}
 		});
 		expect(res.status()).toBe(409);
+
+		// the 409 self-heals: it seals the setup cookie so a lagging client stops looping back here
+		// (the response carries multiple set-cookie headers, so check them all)
+		const setCookies = res
+			.headersArray()
+			.filter((h) => h.name.toLowerCase() === 'set-cookie')
+			.map((h) => h.value);
+		expect(setCookies.some((c) => /mylora_setup=1/.test(c))).toBe(true);
 
 		// the rejected attempt granted no session
 		const verify = await (await request.get('/api/verify')).json();
