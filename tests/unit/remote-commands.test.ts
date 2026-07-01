@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-	buildDoc2loraArgs,
+	buildDoc2LoraArgs,
 	buildLaunchCommand,
 	buildPeftArgs,
 	buildPreflightCommand,
@@ -58,9 +58,9 @@ describe('shq', () => {
 	});
 });
 
-describe('buildDoc2loraArgs', () => {
+describe('buildDoc2LoraArgs', () => {
 	it('emits the expected flag sequence from a config', () => {
-		const args = buildDoc2loraArgs('/tmp/mylora-jobs/job1', cfg());
+		const args = buildDoc2LoraArgs('/tmp/mylora-jobs/job1', cfg());
 		expect(args[0]).toBe('/tmp/mylora-jobs/job1/venv/bin/doc2lora');
 		expect(args).toContain('convert');
 		expect(args).toContain('--model');
@@ -72,7 +72,7 @@ describe('buildDoc2loraArgs', () => {
 	});
 
 	it('appends --load-in-4bit when load4bit is set', () => {
-		const args = buildDoc2loraArgs('/tmp/mylora-jobs/job1', cfg({ load4bit: true }));
+		const args = buildDoc2LoraArgs('/tmp/mylora-jobs/job1', cfg({ load4bit: true }));
 		expect(args).toContain('--load-in-4bit');
 	});
 });
