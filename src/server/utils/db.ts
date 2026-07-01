@@ -55,6 +55,31 @@ async function ensureColumns() {
 			// column already exists
 		}
 	}
+
+	// training_jobs columns added after the table first shipped
+	for (const [col, def] of [
+		['hf_token_cipher', 'TEXT'],
+		['hf_token_iv', 'TEXT'],
+		['hf_token_dek_cipher', 'TEXT'],
+		['hf_token_dek_iv', 'TEXT'],
+		['download_only', 'INTEGER NOT NULL DEFAULT 0'],
+		['locked_at', 'INTEGER'],
+		['telemetry', 'TEXT']
+	] as const) {
+		try {
+			await db.run(sql.raw(`ALTER TABLE training_jobs ADD COLUMN ${col} ${def}`));
+		} catch {
+			// column already exists or table not yet created (createSchema covers fresh dbs)
+		}
+	}
+	// machines columns added after the table first shipped
+	for (const [col, def] of [['system_info', 'TEXT']] as const) {
+		try {
+			await db.run(sql.raw(`ALTER TABLE machines ADD COLUMN ${col} ${def}`));
+		} catch {
+			// column already exists or table not yet created
+		}
+	}
 }
 
 async function createSchema() {
@@ -151,6 +176,94 @@ async function createSchema() {
 	await db.run(
 		sql`CREATE INDEX IF NOT EXISTS idx_downloads_adapter_day ON downloads(adapter_id, day)`
 	);
+
+	await db.run(sql`
+		CREATE TABLE IF NOT EXISTS machines (
+			id TEXT PRIMARY KEY,
+			label TEXT NOT NULL,
+			owner_id TEXT,
+			shared INTEGER NOT NULL DEFAULT 0,
+			host TEXT NOT NULL,
+			port INTEGER NOT NULL DEFAULT 22,
+			username TEXT NOT NULL,
+			auth_method TEXT NOT NULL DEFAULT 'key',
+			connection_type TEXT NOT NULL DEFAULT 'vps',
+			key_cipher TEXT,
+			key_iv TEXT,
+			key_dek_cipher TEXT,
+			key_dek_iv TEXT,
+			passphrase_cipher TEXT,
+			passphrase_iv TEXT,
+			passphrase_dek_cipher TEXT,
+			passphrase_dek_iv TEXT,
+			password_cipher TEXT,
+			password_iv TEXT,
+			password_dek_cipher TEXT,
+			password_dek_iv TEXT,
+			key_source TEXT,
+			public_key TEXT,
+			key_last4 TEXT,
+			host_key_fingerprint TEXT,
+			host_key_type TEXT,
+			health_status TEXT NOT NULL DEFAULT 'unchecked',
+			last_diagnosis TEXT,
+			last_checked_at INTEGER,
+			gpu_info TEXT,
+			system_info TEXT,
+			tooling_ready INTEGER NOT NULL DEFAULT 0,
+			self_report_token_hash TEXT,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+			updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+		)
+	`);
+	await db.run(sql`CREATE INDEX IF NOT EXISTS idx_machines_owner ON machines(owner_id)`);
+
+	await db.run(sql`
+		CREATE TABLE IF NOT EXISTS training_jobs (
+			id TEXT PRIMARY KEY,
+			machine_id TEXT,
+			author_id TEXT,
+			engine TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'queued',
+			status_message TEXT,
+			failure_class TEXT NOT NULL DEFAULT 'none',
+			dataset_id TEXT,
+			input_kind TEXT NOT NULL DEFAULT 'documents',
+			config TEXT NOT NULL,
+			auto_publish INTEGER NOT NULL DEFAULT 0,
+			auto_upload_finetune INTEGER NOT NULL DEFAULT 0,
+			account_id TEXT,
+			hf_token_cipher TEXT,
+			hf_token_iv TEXT,
+			hf_token_dek_cipher TEXT,
+			hf_token_dek_iv TEXT,
+			download_only INTEGER NOT NULL DEFAULT 0,
+			pid INTEGER,
+			pgid INTEGER,
+			wrapper_id TEXT,
+			job_dir TEXT,
+			started_at INTEGER,
+			finished_at INTEGER,
+			last_heartbeat_at INTEGER,
+			last_probe_at INTEGER,
+			locked_at INTEGER,
+			telemetry TEXT,
+			consecutive_failures INTEGER NOT NULL DEFAULT 0,
+			attempt INTEGER NOT NULL DEFAULT 0,
+			next_poll_at INTEGER,
+			log_tail TEXT,
+			adapter_id TEXT,
+			adapter_sha TEXT,
+			adapter_size INTEGER,
+			eta_seconds INTEGER,
+			created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+			updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+		)
+	`);
+	await db.run(sql`CREATE INDEX IF NOT EXISTS idx_jobs_author ON training_jobs(author_id)`);
+	await db.run(sql`CREATE INDEX IF NOT EXISTS idx_jobs_machine ON training_jobs(machine_id)`);
+	await db.run(sql`CREATE INDEX IF NOT EXISTS idx_jobs_status ON training_jobs(status)`);
 }
 
 async function legacyAdminSeed() {
@@ -190,7 +303,9 @@ export async function ensureDatabase() {
 				(await hasTable('users')) &&
 				(await hasTable('cloudflare_accounts')) &&
 				(await hasTable('adapters')) &&
-				(await hasTable('downloads'));
+				(await hasTable('downloads')) &&
+				(await hasTable('machines')) &&
+				(await hasTable('training_jobs'));
 			if (!ready) {
 				console.log('initializing database...');
 				await createSchema();
