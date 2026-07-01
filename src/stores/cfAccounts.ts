@@ -81,6 +81,20 @@ export const useCfAccountsStore = defineStore('cfAccounts', () => {
 		return update(id, { isDefault: true });
 	}
 
+	// accounts the current user can publish TO (owned or shared, active) - available even without
+	// canManageAccounts, so the publish modal can offer a hosting-account picker
+	async function available() {
+		const res = await $fetch<{ accounts: PublicCloudflareAccount[] }>('/api/cf-accounts/available');
+		return res.accounts;
+	}
+
+	// preflight the token's publish permission (Workers AI: Edit) without any side effects
+	async function preflight(id: string) {
+		return $fetch<{ canPublish: boolean | null; detail: string; tokenScope: string }>(
+			`/api/cf-accounts/${id}/preflight`
+		);
+	}
+
 	const defaultAccount = computed(() => accounts.value.find((a) => a.isDefault) ?? null);
 	const totalSlotsUsed = computed(() =>
 		accounts.value.reduce((sum, a) => sum + (a.adapterCount ?? 0), 0)
@@ -96,6 +110,8 @@ export const useCfAccountsStore = defineStore('cfAccounts', () => {
 		remove,
 		sync,
 		setDefault,
+		available,
+		preflight,
 		defaultAccount,
 		totalSlotsUsed
 	};
