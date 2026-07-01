@@ -47,7 +47,15 @@ export default defineConfig({
 	// main run ignores the isolated setup flow; setup run targets only it (fresh unseeded server)
 	...(SETUP
 		? { testMatch: ['**/setup.spec.ts'] }
-		: { testIgnore: ['**/utils/**', '**/fixtures/**', '**/fixtures.ts', '**/setup.spec.ts'] }),
+		: {
+				testIgnore: [
+					'**/utils/**',
+					'**/fixtures/**',
+					'**/fixtures.ts',
+					'**/setup.spec.ts',
+					'**/unit/**'
+				]
+			}),
 	fullyParallel: false,
 	forbidOnly: isCI,
 	retries: isCI ? 2 : 0,
