@@ -75,6 +75,12 @@ const capabilities: { key: keyof Capability; label: string; description: string 
 		description: 'Add/edit Cloudflare accounts'
 	},
 	{
+		key: 'canManageMachines',
+		label: 'Manage Machines',
+		description: 'Add/edit any training machine'
+	},
+	{ key: 'canTrain', label: 'Train', description: 'Launch and manage training jobs' },
+	{
 		key: 'unlimitedTester',
 		label: 'Unlimited Testing',
 		description: 'Bypass inference rate limits'

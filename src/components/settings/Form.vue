@@ -4,9 +4,9 @@
 		class="flex items-center justify-center p-8"
 	>
 		<div class="flex flex-col items-center gap-2">
-			<UIcon
-				name="mdi:loading"
-				class="size-8 animate-spin text-primary"
+			<AppSpinner
+				size="lg"
+				class="text-primary"
 			/>
 			<p class="text-sm text-muted">Loading settings...</p>
 		</div>
@@ -361,6 +361,18 @@
 						type="number"
 						:min="0"
 						:max="8000"
+						class="w-full"
+					/>
+				</UFormField>
+				<UFormField
+					label="Log Retention (Days)"
+					help="Purge training logs from storage after this many days (7-365)"
+				>
+					<UInput
+						v-model.number="limits.logRetentionDays"
+						type="number"
+						:min="7"
+						:max="365"
 						class="w-full"
 					/>
 				</UFormField>
