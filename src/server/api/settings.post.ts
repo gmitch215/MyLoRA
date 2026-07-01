@@ -27,5 +27,6 @@ export default defineEventHandler(async (event) => {
 		if (v !== undefined) await setJsonSetting(k, v);
 	}
 
+	await invalidateSettings();
 	return await getAllSettings();
 });

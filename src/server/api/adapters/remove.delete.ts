@@ -3,6 +3,7 @@ import { blob } from 'hub:blob';
 import { db } from 'hub:db';
 import { adapters, cloudflareAccounts } from 'hub:db:schema';
 import { requireAdapterAccess } from '~/server/utils/auth';
+import { invalidateAdapterLists } from '~/server/utils/cache';
 import { CfUnsupported, deleteFinetune, describeCfError } from '~/server/utils/cloudflare';
 import { decryptToken } from '~/server/utils/crypto';
 import { ensureDatabase } from '~/server/utils/db';
@@ -76,6 +77,7 @@ export default defineEventHandler(async (event) => {
 		// slot reclaimed on cloudflare: hard-delete row + all r2 objects
 		await dropBlobs(adapter);
 		await db.delete(adapters).where(eq(adapters.id, id));
+		await invalidateAdapterLists();
 		return { ok: true, reclaimed: true };
 	}
 
@@ -91,5 +93,6 @@ export default defineEventHandler(async (event) => {
 			updatedAt: new Date()
 		})
 		.where(eq(adapters.id, id));
+	await invalidateAdapterLists();
 	return { ok: true, reclaimed: false };
 });

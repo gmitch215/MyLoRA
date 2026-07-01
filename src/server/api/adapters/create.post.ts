@@ -52,5 +52,6 @@ export default defineEventHandler(async (event) => {
 		status: 'draft'
 	});
 
+	await invalidateAdapterLists();
 	return { id, slug: finalSlug };
 });

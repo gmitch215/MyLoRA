@@ -70,6 +70,7 @@ export default defineEventHandler(async (event) => {
 	}
 
 	await db.update(adapters).set(patch).where(eq(adapters.id, id));
+	await invalidateAdapterLists();
 
 	const rows = await db
 		.select()

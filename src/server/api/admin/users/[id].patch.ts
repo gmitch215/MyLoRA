@@ -73,5 +73,7 @@ export default defineEventHandler(async (event) => {
 		}
 		throw createError({ statusCode: 500, statusMessage: `User update failed: ${reason}` });
 	}
+	// bust the cached row so a role/active/profile change takes effect within a request, not 30s later
+	await invalidateUser(id);
 	return { ok: true };
 });

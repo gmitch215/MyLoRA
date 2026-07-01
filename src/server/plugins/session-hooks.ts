@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { users } from 'hub:db:schema';
+import { tryCache, userCacheKey } from '~/server/utils/cache';
 import { ensureDatabase } from '~/server/utils/db';
 
 export default defineNitroPlugin(() => {
@@ -10,8 +11,16 @@ export default defineNitroPlugin(() => {
 		let fresh;
 		try {
 			await ensureDatabase();
-			const rows = await db.select().from(users).where(eq(users.id, session.user.id)).limit(1);
-			fresh = rows[0];
+			// this fires on EVERY authed request (via the ratelimit middleware); cache the row so it is
+			// a cheap kv read, not a d1 query, each time. busted on user edits (see invalidateUser)
+			fresh = await tryCache(
+				userCacheKey(session.user.id),
+				async () => {
+					const rows = await db.select().from(users).where(eq(users.id, session.user.id)).limit(1);
+					return rows[0] ?? null;
+				},
+				30
+			);
 		} catch (e) {
 			console.warn('session-hooks fetch lookup failed, leaving session intact', e);
 			return;

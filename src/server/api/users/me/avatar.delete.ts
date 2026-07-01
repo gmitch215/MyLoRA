@@ -3,6 +3,7 @@ import { blob } from 'hub:blob';
 import { db } from 'hub:db';
 import { users } from 'hub:db:schema';
 import { requireAuthed } from '~/server/utils/auth';
+import { invalidateUser } from '~/server/utils/cache';
 import { ensureDatabase } from '~/server/utils/db';
 
 export default defineEventHandler(async (event) => {
@@ -19,6 +20,7 @@ export default defineEventHandler(async (event) => {
 		.update(users)
 		.set({ avatarPathname: null, updatedAt: new Date() })
 		.where(eq(users.id, me.id));
+	await invalidateUser(me.id);
 
 	return { ok: true };
 });

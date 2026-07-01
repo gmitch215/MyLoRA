@@ -94,6 +94,7 @@ export default defineEventHandler(async (event) => {
 	if (!changed) {
 		throw createError({ statusCode: 409, statusMessage: 'A publish is already in progress' });
 	}
+	await invalidateAdapterLists();
 	await setJob(id, { phase: 'create', progress: 0, attempt: 1, ts: Date.now() });
 
 	// mark the adapter published + bump the account's slot count (used by both the happy path and
@@ -113,6 +114,7 @@ export default defineEventHandler(async (event) => {
 			.update(cloudflareAccounts)
 			.set({ adapterCount: sql`${cloudflareAccounts.adapterCount} + 1`, updatedAt: new Date() })
 			.where(eq(cloudflareAccounts.id, accountRowId));
+		await invalidateAdapterLists();
 		await setJob(id, { phase: 'done', progress: 100, attempt: 1, ts: Date.now() });
 	};
 

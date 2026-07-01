@@ -3,6 +3,7 @@ import { blob } from 'hub:blob';
 import { db } from 'hub:db';
 import { adapters } from 'hub:db:schema';
 import { requireAdapterAccess } from '~/server/utils/auth';
+import { invalidateAdapterLists } from '~/server/utils/cache';
 import { canonicalizeAdapterConfig, readRankFromConfig } from '~/server/utils/cloudflare';
 import { ensureDatabase } from '~/server/utils/db';
 import { getLimits } from '~/server/utils/settings';
@@ -72,6 +73,7 @@ export default defineEventHandler(async (event) => {
 		.update(adapters)
 		.set({ configBytes, weightsBytes, status, updatedAt: new Date() })
 		.where(eq(adapters.id, id));
+	await invalidateAdapterLists();
 
 	return { ok: true, status, configBytes, weightsBytes };
 });

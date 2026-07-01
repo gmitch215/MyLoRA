@@ -6,6 +6,9 @@ let isInitialized = false;
 let initPromise: Promise<void> | null = null;
 
 export const SETUP_COMPLETED_KV_KEY = 'mylora:setup_completed';
+// set once the schema+columns exist so cold worker isolates skip the probe + ALTER storm (which was
+// ~17 sequential d1 round-trips per cold request); a single cheap kv read replaces it
+export const SCHEMA_READY_KV_KEY = 'mylora:schema_ready';
 
 export async function markSetupCompleted() {
 	try {
@@ -298,20 +301,35 @@ export async function ensureDatabase() {
 
 	initPromise = (async () => {
 		try {
-			// probe every table so a missing one is recreated (createSchema is all IF NOT EXISTS)
-			const ready =
-				(await hasTable('users')) &&
-				(await hasTable('cloudflare_accounts')) &&
-				(await hasTable('adapters')) &&
-				(await hasTable('downloads')) &&
-				(await hasTable('machines')) &&
-				(await hasTable('training_jobs'));
-			if (!ready) {
-				console.log('initializing database...');
-				await createSchema();
+			// fast path: a prior request/deploy already built the schema, so skip the expensive probe +
+			// ALTER storm entirely (one kv read instead of ~17 d1 round-trips on a cold isolate)
+			let schemaReady = false;
+			try {
+				schemaReady = Boolean(await kv.get(SCHEMA_READY_KV_KEY));
+			} catch {
+				// kv unavailable -> fall through to the full probe
 			}
-			await ensureColumns();
-			await legacyAdminSeed();
+			if (!schemaReady) {
+				// probe every table so a missing one is recreated (createSchema is all IF NOT EXISTS)
+				const ready =
+					(await hasTable('users')) &&
+					(await hasTable('cloudflare_accounts')) &&
+					(await hasTable('adapters')) &&
+					(await hasTable('downloads')) &&
+					(await hasTable('machines')) &&
+					(await hasTable('training_jobs'));
+				if (!ready) {
+					console.log('initializing database...');
+					await createSchema();
+				}
+				await ensureColumns();
+				await legacyAdminSeed();
+				try {
+					await kv.set(SCHEMA_READY_KV_KEY, '1');
+				} catch {
+					// non-fatal: we just re-probe next cold isolate
+				}
+			}
 			isInitialized = true;
 		} catch (error: any) {
 			console.error('database init error:', describeDbError(error));

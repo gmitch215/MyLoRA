@@ -3,6 +3,7 @@ import { blob } from 'hub:blob';
 import { db } from 'hub:db';
 import { users } from 'hub:db:schema';
 import { adminCount, requireAdmin } from '~/server/utils/auth';
+import { invalidateUser } from '~/server/utils/cache';
 import { ensureDatabase } from '~/server/utils/db';
 
 export default defineEventHandler(async (event) => {
@@ -48,6 +49,7 @@ export default defineEventHandler(async (event) => {
 	}
 
 	await db.delete(users).where(eq(users.id, id));
+	await invalidateUser(id);
 
 	return { ok: true };
 });

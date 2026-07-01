@@ -35,5 +35,6 @@ export default defineEventHandler(async (event) => {
 	}
 
 	await db.update(users).set(updates).where(eq(users.id, me.id));
+	await invalidateUser(me.id);
 	return { ok: true };
 });
