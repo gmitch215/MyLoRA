@@ -37,7 +37,11 @@ export async function getAccess(): Promise<AccessSettings> {
 }
 
 export async function getPermissions(): Promise<PermissionMatrix> {
-	return getJson('permissions', DEFAULT_PERMISSIONS);
+	const stored = await getJson('permissions', DEFAULT_PERMISSIONS);
+	return {
+		developer: { ...DEFAULT_PERMISSIONS.developer, ...stored.developer },
+		manager: { ...DEFAULT_PERMISSIONS.manager, ...stored.manager }
+	};
 }
 
 // public tier clamped to its ranges; developer tier never clamped
