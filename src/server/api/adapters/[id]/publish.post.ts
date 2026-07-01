@@ -1,9 +1,7 @@
-import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
-import type { CloudflareAccount } from 'hub:db:schema';
 import { adapters, cloudflareAccounts } from 'hub:db:schema';
 
-const ACCOUNT_CAP = 100;
 const pushKey = (id: string) => `mylora:push:${id}`;
 
 async function setJob(id: string, job: PushJob) {
@@ -50,52 +48,37 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 400, statusMessage: 'Weights exceed Cloudflare maximum size' });
 	}
 
-	// choose the hosting account: explicit -> default -> first active shared with a free slot
-	let account: CloudflareAccount | undefined;
-	if (adapter.accountId) {
-		account = (
-			await db
-				.select()
-				.from(cloudflareAccounts)
-				.where(eq(cloudflareAccounts.id, adapter.accountId))
-				.limit(1)
-		)[0];
-	} else {
-		account = (
-			await db
-				.select()
-				.from(cloudflareAccounts)
-				.where(and(eq(cloudflareAccounts.isActive, true), eq(cloudflareAccounts.isDefault, true)))
-				.limit(1)
-		)[0];
-		if (!account) {
-			account = (
-				await db
-					.select()
-					.from(cloudflareAccounts)
-					.where(
-						and(
-							eq(cloudflareAccounts.isActive, true),
-							eq(cloudflareAccounts.shared, true),
-							lt(cloudflareAccounts.adapterCount, ACCOUNT_CAP)
-						)
-					)
-					.orderBy(asc(cloudflareAccounts.adapterCount))
-					.limit(1)
-			)[0];
-		}
-	}
-	if (!account)
-		throw createError({ statusCode: 409, statusMessage: 'No Cloudflare account available' });
-	if (account.adapterCount >= ACCOUNT_CAP) {
-		throw createError({ statusCode: 409, statusMessage: 'Hosting account is at its adapter cap' });
-	}
+	// which cloudflare account hosts this: an explicit choice in the body wins, else the adapter's
+	// pinned account, else default, else the user's own / a shared account with a free slot
+	const body = (await readBody(event).catch(() => ({}))) as { accountId?: string };
+	const requestedAccountId = typeof body?.accountId === 'string' ? body.accountId.trim() : '';
+	const resolved = await resolveHostingAccount({
+		userId: user.id,
+		adapterAccountId: adapter.accountId,
+		requestedAccountId: requestedAccountId || null
+	});
+	if (!resolved.account)
+		throw createError({
+			statusCode: 409,
+			statusMessage: resolved.error ?? 'No Cloudflare account available'
+		});
+	const account = resolved.account;
 
 	await assertEncryptionKey();
 	const token = await decryptToken(account);
 	const cfAccountId = account.accountId;
 	const accountRowId = account.id;
 	const existingFinetuneId = adapter.finetuneId;
+
+	// preflight the token's publish permission so a misconfigured token fails fast with clear guidance
+	// (a side-effect-free probe) instead of flipping the adapter to 'pushing' and then 'failed'
+	const perm = await checkFinetuneWritePermission(cfAccountId, token);
+	if (perm.canPublish === false) {
+		throw createError({
+			statusCode: 403,
+			statusMessage: `Cloudflare token cannot publish: ${perm.detail} Create a token with "Workers AI: Edit" and update this account.`
+		});
+	}
 
 	// atomic lock: only flip from listed/failed so a concurrent publish cannot double-create the
 	// finetune or double-count the account; bail if another request already won the flip
@@ -142,8 +125,7 @@ export default defineEventHandler(async (event) => {
 				const ft = await createFinetune(cfAccountId, token, {
 					model: adapter.baseModel,
 					name: adapter.slug,
-					description: adapter.description || undefined,
-					public: adapter.cfPublic
+					description: adapter.description || undefined
 				});
 				finetuneId = ft.id;
 				await db
@@ -151,13 +133,8 @@ export default defineEventHandler(async (event) => {
 					.set({ finetuneId, updatedAt: new Date() })
 					.where(eq(adapters.id, id));
 			}
-			await setJob(id, { phase: 'config', progress: 25, attempt: 1, ts: Date.now() });
 
-			const configBlob = await blob.get(`adapters/${id}/adapter_config.json`);
-			if (!configBlob) throw new Error('config object missing from storage');
-			await uploadFinetuneAsset(cfAccountId, token, finetuneId, 'adapter_config.json', configBlob);
-			await setJob(id, { phase: 'weights', progress: 60, attempt: 1, ts: Date.now() });
-
+			await setJob(id, { phase: 'weights', progress: 30, attempt: 1, ts: Date.now() });
 			const weightsBlob = await blob.get(`adapters/${id}/adapter_model.safetensors`);
 			if (!weightsBlob) throw new Error('weights object missing from storage');
 			await uploadFinetuneAsset(
@@ -168,9 +145,15 @@ export default defineEventHandler(async (event) => {
 				weightsBlob
 			);
 
+			await setJob(id, { phase: 'config', progress: 70, attempt: 1, ts: Date.now() });
+			const configBlob = await blob.get(`adapters/${id}/adapter_config.json`);
+			if (!configBlob) throw new Error('config object missing from storage');
+			await uploadFinetuneAsset(cfAccountId, token, finetuneId, 'adapter_config.json', configBlob);
+
 			await markPublished(finetuneId);
 		} catch (e) {
-			const msg = describeCfError(e);
+			// explainCfError adds actionable guidance for a token-permission rejection (ACTION_NOT_AUTHORIZED)
+			const msg = explainCfError(e);
 			// a dedupe conflict or a dropped connection can fire after cloudflare already committed;
 			// verify the finetune actually exists before declaring failure
 			if (finetuneId && (isBenignCfError(e) || isTransientCfError(e))) {

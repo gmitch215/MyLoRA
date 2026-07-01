@@ -17,11 +17,14 @@ export default defineCachedEventHandler(
 		const tag = typeof q.tag === 'string' ? q.tag.trim() : '';
 		const sort: Sort = SORTS.includes(q.sort as Sort) ? (q.sort as Sort) : 'newest';
 
+		// `mine=1` restricts to the current user's own adapters (the dashboard uses this so its list is
+		// never a filtered/paginated slice of the shared public feed). allow a larger page for a personal
+		// dashboard since it is not the public grid.
+		const mine = (q.mine === '1' || q.mine === 'true') && !!user;
+
 		const limits = await getLimits();
-		const pageSize = Math.min(
-			limits.gridPageSize,
-			Math.max(1, Number(q.pageSize) || limits.gridPageSize)
-		);
+		const maxPage = mine ? 200 : limits.gridPageSize;
+		const pageSize = Math.min(maxPage, Math.max(1, Number(q.pageSize) || maxPage));
 		const page = Math.max(1, Number(q.page) || 1);
 
 		// anyone sees public+listed/published; a logged-in user also sees their own (never archived)
@@ -33,9 +36,11 @@ export default defineCachedEventHandler(
 				eq(adapters.status, 'migrated')
 			)
 		);
-		const visibilityClause = user
-			? or(publicClause, and(eq(adapters.authorId, user.id), sql`${adapters.status} != 'archived'`))
-			: publicClause;
+		const ownClause = user
+			? and(eq(adapters.authorId, user.id), sql`${adapters.status} != 'archived'`)
+			: undefined;
+		// mine -> only the user's own; otherwise public (+ the user's own when logged in)
+		const visibilityClause = mine ? ownClause : user ? or(publicClause, ownClause!) : publicClause;
 
 		const filters = [visibilityClause];
 		if (search) {
