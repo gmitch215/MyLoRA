@@ -290,6 +290,183 @@ export async function getInferenceTotal(fromDay: string, toDay: string): Promise
 	return total;
 }
 
+// training analytics: per-day rollup of training-job starts + outcomes (timing, machine/gpu, engine,
+// model, status). pure apply* helpers fold one event into a rollup so they are unit-testable.
+const trainKey = (day: string) => `mylora:train:${day}`;
+
+export type TrainingRollup = {
+	started: number;
+	completed: number;
+	failed: number; // failed + abnormal
+	aborted: number;
+	// finished jobs with a known wall-clock duration (seconds)
+	durationSum: number;
+	durationSamples: number;
+	// sum of the up-front estimates for those same samples (for estimate-accuracy)
+	etaSum: number;
+	byEngine: Record<string, number>; // starts
+	byModel: Record<string, number>; // starts
+	byStatus: Record<string, number>; // terminal outcomes
+	byGpu: Record<string, number>; // finished, by gpu name
+};
+
+export function emptyTrainingRollup(): TrainingRollup {
+	return {
+		started: 0,
+		completed: 0,
+		failed: 0,
+		aborted: 0,
+		durationSum: 0,
+		durationSamples: 0,
+		etaSum: 0,
+		byEngine: {},
+		byModel: {},
+		byStatus: {},
+		byGpu: {}
+	};
+}
+
+function parseTrainingRollup(raw: unknown): TrainingRollup {
+	const r = emptyTrainingRollup();
+	if (!raw) return r;
+	try {
+		const p = typeof raw === 'string' ? JSON.parse(raw) : raw;
+		if (p && typeof p === 'object') {
+			r.started = Number(p.started) || 0;
+			r.completed = Number(p.completed) || 0;
+			r.failed = Number(p.failed) || 0;
+			r.aborted = Number(p.aborted) || 0;
+			r.durationSum = Number(p.durationSum) || 0;
+			r.durationSamples = Number(p.durationSamples) || 0;
+			r.etaSum = Number(p.etaSum) || 0;
+			for (const k of ['byEngine', 'byModel', 'byStatus', 'byGpu'] as const) {
+				if (p[k] && typeof p[k] === 'object') r[k] = p[k];
+			}
+		}
+	} catch {}
+	return r;
+}
+
+// fold a job start into a rollup (pure)
+export function applyTrainingStart(
+	r: TrainingRollup,
+	o: { engine: string; model: string }
+): TrainingRollup {
+	r.started++;
+	r.byEngine[o.engine] = (r.byEngine[o.engine] || 0) + 1;
+	const model = o.model || 'unknown';
+	r.byModel[model] = (r.byModel[model] || 0) + 1;
+	return r;
+}
+
+// fold a terminal outcome into a rollup (pure)
+export function applyTrainingFinish(
+	r: TrainingRollup,
+	o: {
+		status: string;
+		gpu?: string | null;
+		durationSeconds?: number | null;
+		etaSeconds?: number | null;
+	}
+): TrainingRollup {
+	r.byStatus[o.status] = (r.byStatus[o.status] || 0) + 1;
+	if (o.status === 'completed') r.completed++;
+	else if (o.status === 'failed' || o.status === 'abnormal') r.failed++;
+	else if (o.status === 'aborted') r.aborted++;
+	const gpu = o.gpu || 'unknown';
+	r.byGpu[gpu] = (r.byGpu[gpu] || 0) + 1;
+	if (o.durationSeconds && o.durationSeconds > 0) {
+		r.durationSum += o.durationSeconds;
+		r.durationSamples++;
+		if (o.etaSeconds && o.etaSeconds > 0) r.etaSum += o.etaSeconds;
+	}
+	return r;
+}
+
+export async function recordTrainingStart(day: string, o: { engine: string; model: string }) {
+	const key = trainKey(day);
+	try {
+		const r = applyTrainingStart(parseTrainingRollup(await kv.get<string>(key)), o);
+		await kv.set(key, JSON.stringify(r));
+	} catch {}
+}
+
+export async function recordTrainingFinish(
+	day: string,
+	o: {
+		status: string;
+		gpu?: string | null;
+		durationSeconds?: number | null;
+		etaSeconds?: number | null;
+	}
+) {
+	const key = trainKey(day);
+	try {
+		const r = applyTrainingFinish(parseTrainingRollup(await kv.get<string>(key)), o);
+		await kv.set(key, JSON.stringify(r));
+	} catch {}
+}
+
+export type TrainingAnalytics = {
+	started: number;
+	completed: number;
+	failed: number;
+	aborted: number;
+	successRate: number; // completed / finished
+	avgDurationSeconds: number;
+	totalTrainingSeconds: number; // proxy for gpu-time spent
+	etaRatio: number | null; // actual / estimated (>1 = slower than estimated)
+	perDay: { day: string; started: number; completed: number; failed: number }[];
+	byEngine: Record<string, number>;
+	byModel: Record<string, number>;
+	byStatus: Record<string, number>;
+	byGpu: Record<string, number>;
+};
+
+export async function getTrainingAnalytics(
+	fromDay: string,
+	toDay: string
+): Promise<TrainingAnalytics> {
+	const agg = emptyTrainingRollup();
+	const perDay: { day: string; started: number; completed: number; failed: number }[] = [];
+	for (const day of dayRange(fromDay, toDay)) {
+		let raw: string | null = null;
+		try {
+			raw = await kv.get<string>(trainKey(day));
+		} catch {
+			raw = null;
+		}
+		const r = parseTrainingRollup(raw);
+		perDay.push({ day, started: r.started, completed: r.completed, failed: r.failed });
+		agg.started += r.started;
+		agg.completed += r.completed;
+		agg.failed += r.failed;
+		agg.aborted += r.aborted;
+		agg.durationSum += r.durationSum;
+		agg.durationSamples += r.durationSamples;
+		agg.etaSum += r.etaSum;
+		for (const k of ['byEngine', 'byModel', 'byStatus', 'byGpu'] as const) {
+			for (const [kk, v] of Object.entries(r[k])) agg[k][kk] = (agg[k][kk] || 0) + (v as number);
+		}
+	}
+	const finished = agg.completed + agg.failed + agg.aborted;
+	return {
+		started: agg.started,
+		completed: agg.completed,
+		failed: agg.failed,
+		aborted: agg.aborted,
+		successRate: finished ? agg.completed / finished : 0,
+		avgDurationSeconds: agg.durationSamples ? Math.round(agg.durationSum / agg.durationSamples) : 0,
+		totalTrainingSeconds: agg.durationSum,
+		etaRatio: agg.etaSum > 0 ? agg.durationSum / agg.etaSum : null,
+		perDay,
+		byEngine: agg.byEngine,
+		byModel: agg.byModel,
+		byStatus: agg.byStatus,
+		byGpu: agg.byGpu
+	};
+}
+
 // download analytics: simple per-adapter daily counter in KV; used by the downloads api
 export async function recordDownload(day: string, adapterId: string, asset: string) {
 	const key = dlKey(day, adapterId);

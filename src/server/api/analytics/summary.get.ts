@@ -1,6 +1,6 @@
-import { inArray } from 'drizzle-orm';
+import { inArray, notInArray } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { adapters } from 'hub:db:schema';
+import { adapters, trainingJobs } from 'hub:db:schema';
 import {
 	dayRange,
 	daysAgoUTC,
@@ -8,6 +8,7 @@ import {
 	getInferenceAnalytics,
 	getInferenceTotal,
 	getOrBuildRollup,
+	getTrainingAnalytics,
 	rangeFromQuery,
 	todayUTC
 } from '~/server/utils/analytics';
@@ -143,6 +144,21 @@ export default defineEventHandler(async (event) => {
 		inferByModel[short] = (inferByModel[short] || 0) + count;
 	}
 
+	// training analytics: timing + machine/gpu + engine/model/status telemetry over the range, plus a
+	// live snapshot of jobs in flight right now (not range-bound)
+	const training = await getTrainingAnalytics(from, to);
+	const trainByModel: Record<string, number> = {};
+	for (const [model, count] of Object.entries(training.byModel)) {
+		const short = model.split('/').pop() || model;
+		trainByModel[short] = (trainByModel[short] || 0) + count;
+	}
+	const activeRows = await db
+		.select({ status: trainingJobs.status })
+		.from(trainingJobs)
+		.where(notInArray(trainingJobs.status, ['completed', 'failed', 'abnormal', 'aborted']));
+	const activeByStatus: Record<string, number> = {};
+	for (const r of activeRows) activeByStatus[r.status] = (activeByStatus[r.status] || 0) + 1;
+
 	const avgActiveMs = current.views > 0 ? Math.round(current.activeSum / current.views) : 0;
 	const prevAvgActiveMs = previous.views > 0 ? Math.round(previous.activeSum / previous.views) : 0;
 	const completionRate = current.views > 0 ? current.depth100 / current.views : 0;
@@ -170,6 +186,23 @@ export default defineEventHandler(async (event) => {
 		downloads: {
 			total: downloadsTotal,
 			top: topDownloads
+		},
+		training: {
+			started: training.started,
+			completed: training.completed,
+			failed: training.failed,
+			aborted: training.aborted,
+			successRate: training.successRate,
+			avgDurationSeconds: training.avgDurationSeconds,
+			totalTrainingSeconds: training.totalTrainingSeconds,
+			etaRatio: training.etaRatio,
+			perDay: training.perDay,
+			byEngine: training.byEngine,
+			byModel: trainByModel,
+			byStatus: training.byStatus,
+			byGpu: training.byGpu,
+			active: activeRows.length,
+			activeByStatus
 		},
 		refs: current.refs,
 		devices: current.devices,

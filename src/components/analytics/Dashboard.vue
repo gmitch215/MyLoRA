@@ -220,6 +220,89 @@
 			</div>
 		</section>
 
+		<section class="rounded border border-default p-3 space-y-3">
+			<div class="flex items-center justify-between">
+				<h3 class="text-sm font-medium text-highlighted">Training Jobs</h3>
+				<span
+					v-if="(data?.training?.active ?? 0) > 0"
+					class="text-xs text-primary tabular-nums"
+				>
+					{{ data?.training?.active }} Running Now
+				</span>
+			</div>
+			<div
+				v-if="pending"
+				class="h-20"
+			>
+				<USkeleton class="h-full w-full" />
+			</div>
+			<template v-else>
+				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+					<div class="rounded bg-elevated/50 p-2">
+						<div class="text-xs text-muted">Active Now</div>
+						<div class="text-lg font-semibold tabular-nums">{{ data?.training?.active ?? 0 }}</div>
+					</div>
+					<div class="rounded bg-elevated/50 p-2">
+						<div class="text-xs text-muted">Started</div>
+						<div class="text-lg font-semibold tabular-nums">{{ data?.training?.started ?? 0 }}</div>
+					</div>
+					<div class="rounded bg-elevated/50 p-2">
+						<div class="text-xs text-muted">Completed</div>
+						<div class="text-lg font-semibold tabular-nums">
+							{{ data?.training?.completed ?? 0 }}
+						</div>
+					</div>
+					<div class="rounded bg-elevated/50 p-2">
+						<div class="text-xs text-muted">Success Rate</div>
+						<div class="text-lg font-semibold tabular-nums">
+							{{ formatPercent(data?.training?.successRate ?? 0) }}
+						</div>
+					</div>
+					<div class="rounded bg-elevated/50 p-2">
+						<div class="text-xs text-muted">Avg Duration</div>
+						<div class="text-lg font-semibold tabular-nums">
+							{{ formatDuration(data?.training?.avgDurationSeconds ?? 0) }}
+						</div>
+					</div>
+					<div class="rounded bg-elevated/50 p-2">
+						<div class="text-xs text-muted">Total Train Time</div>
+						<div class="text-lg font-semibold tabular-nums">
+							{{ formatDuration(data?.training?.totalTrainingSeconds ?? 0) }}
+						</div>
+					</div>
+				</div>
+				<p
+					v-if="data?.training?.etaRatio"
+					class="text-xs text-muted"
+				>
+					Jobs ran at {{ Math.round((data.training.etaRatio ?? 1) * 100) }}% of the estimated time
+					(over 100% means slower than estimated).
+				</p>
+				<div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+					<AnalyticsBreakdownCard
+						title="By Engine"
+						:counts="data?.training?.byEngine ?? {}"
+						:loading="pending"
+					/>
+					<AnalyticsBreakdownCard
+						title="By Base Model"
+						:counts="data?.training?.byModel ?? {}"
+						:loading="pending"
+					/>
+					<AnalyticsBreakdownCard
+						title="By GPU"
+						:counts="data?.training?.byGpu ?? {}"
+						:loading="pending"
+					/>
+					<AnalyticsBreakdownCard
+						title="By Outcome"
+						:counts="data?.training?.byStatus ?? {}"
+						:loading="pending"
+					/>
+				</div>
+			</template>
+		</section>
+
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
 			<AnalyticsBreakdownCard
 				title="Referrers"
@@ -270,6 +353,23 @@ type Summary = {
 	downloads: {
 		total: number;
 		top: { slug: string; name: string; total: number; byAsset: Record<string, number> }[];
+	};
+	training: {
+		started: number;
+		completed: number;
+		failed: number;
+		aborted: number;
+		successRate: number;
+		avgDurationSeconds: number;
+		totalTrainingSeconds: number;
+		etaRatio: number | null;
+		perDay: { day: string; started: number; completed: number; failed: number }[];
+		byEngine: Record<string, number>;
+		byModel: Record<string, number>;
+		byStatus: Record<string, number>;
+		byGpu: Record<string, number>;
+		active: number;
+		activeByStatus: Record<string, number>;
 	};
 	refs: Record<string, number>;
 	devices: Record<string, number>;
