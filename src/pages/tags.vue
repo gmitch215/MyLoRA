@@ -13,9 +13,9 @@
 			v-if="pending"
 			class="flex justify-center py-12"
 		>
-			<UIcon
-				name="mdi:loading"
-				class="size-8 animate-spin text-muted"
+			<AppSpinner
+				size="lg"
+				class="text-muted"
 			/>
 		</div>
 
