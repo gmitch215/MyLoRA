@@ -17,6 +17,8 @@ export const ADMIN_CAPABILITY: Capability = {
 	canDeleteAny: true,
 	canPublish: true,
 	canManageAccounts: true,
+	canManageMachines: true,
+	canTrain: true,
 	unlimitedTester: true
 };
 
@@ -29,6 +31,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
 		canDeleteAny: false,
 		canPublish: false,
 		canManageAccounts: false,
+		canManageMachines: false,
+		canTrain: true,
 		unlimitedTester: false
 	},
 	manager: {
@@ -39,6 +43,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
 		canDeleteAny: false,
 		canPublish: true,
 		canManageAccounts: true,
+		canManageMachines: true,
+		canTrain: true,
 		unlimitedTester: true
 	}
 };
@@ -68,7 +74,8 @@ export const DEFAULT_LIMITS: LimitsSettings = {
 	accountBudgetPerMinute: 300,
 	inferenceCacheTtl: 60,
 	maxOutputTokens: 512,
-	maxSystemPromptChars: 2000
+	maxSystemPromptChars: 2000,
+	logRetentionDays: 90
 };
 
 export const DEFAULT_FEATURES: FeatureFlags = {
