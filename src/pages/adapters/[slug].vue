@@ -104,8 +104,7 @@
 					<div class="relative">
 						<pre
 							class="scrollbar-hide bg-elevated border border-default rounded-lg p-4 overflow-x-auto text-sm whitespace-pre-wrap wrap-break-word"
-							>{{ adapter.promptTemplate }}</pre
-						>
+							>{{ adapter.promptTemplate }}</pre>
 						<UButton
 							icon="mdi:content-copy"
 							color="neutral"
