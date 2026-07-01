@@ -54,6 +54,8 @@ test.describe('settings api', () => {
 						canDeleteAny: false,
 						canPublish: true,
 						canManageAccounts: false,
+						canManageMachines: false,
+						canTrain: true,
 						unlimitedTester: false
 					},
 					manager: {
@@ -64,6 +66,8 @@ test.describe('settings api', () => {
 						canDeleteAny: false,
 						canPublish: true,
 						canManageAccounts: true,
+						canManageMachines: true,
+						canTrain: true,
 						unlimitedTester: true
 					}
 				}
@@ -84,6 +88,8 @@ test.describe('settings api', () => {
 						canDeleteAny: false,
 						canPublish: false,
 						canManageAccounts: false,
+						canManageMachines: false,
+						canTrain: true,
 						unlimitedTester: false
 					},
 					manager: {
@@ -94,6 +100,8 @@ test.describe('settings api', () => {
 						canDeleteAny: false,
 						canPublish: true,
 						canManageAccounts: true,
+						canManageMachines: true,
+						canTrain: true,
 						unlimitedTester: true
 					}
 				}
