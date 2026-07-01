@@ -49,7 +49,7 @@
 				<UTable
 					:data="mine"
 					:columns="columns"
-					:loading="adaptersStore.loading"
+					:loading="adaptersStore.mineLoading"
 					:empty="emptyLabel"
 				>
 					<template #name-cell="{ row }">
@@ -62,19 +62,21 @@
 					</template>
 
 					<template #status-cell="{ row }">
+						<AdapterPushStatus
+							v-if="publishStore.isActive(row.original.id)"
+							compact
+							:job="publishStore.states[row.original.id]?.job ?? null"
+							:status="publishStore.states[row.original.id]?.status || row.original.status"
+							:status-message="publishStore.states[row.original.id]?.message"
+						/>
 						<UBadge
+							v-else
 							:color="statusColor(row.original.status)"
 							variant="subtle"
 							class="capitalize"
 						>
 							{{ row.original.status }}
 						</UBadge>
-						<AdapterPushStatus
-							v-if="publishingId === row.original.id"
-							:job="uploadStore.job"
-							:status="uploadStore.status || 'draft'"
-							class="mt-1"
-						/>
 					</template>
 
 					<template #baseModel-cell="{ row }">
@@ -124,7 +126,7 @@
 								color="primary"
 								variant="ghost"
 								title="Publish"
-								:loading="publishingId === row.original.id"
+								:loading="publishStore.isActive(row.original.id)"
 								@click="publish(row.original)"
 							/>
 							<UButton
@@ -189,20 +191,28 @@ definePageMeta({ layout: 'dashboard', middleware: 'auth' });
 const auth = useAuthStore();
 const { user } = storeToRefs(auth);
 const adaptersStore = useAdaptersStore();
-const uploadStore = useUploadStore();
+const publishStore = usePublishStore();
 const toast = useToast();
 
-// load the full list then filter to the current author client-side
+// the dashboard fetches the user's OWN adapters via a dedicated call (mine=1), kept separate from the
+// public grid store so its rows are never a filtered/paginated slice of the shared feed
 async function refresh() {
-	await adaptersStore.fetchList();
+	await adaptersStore.fetchMine();
 }
-await useAsyncData('my-adapters', async () => {
-	await adaptersStore.fetchList();
-	return adaptersStore.items.length;
-});
+// client-only: this list is user-specific (mine=1 needs the session), and an SSR $fetch does not carry
+// the auth cookie - it would return public-only and drop the user's failed/unlisted rows on refresh
+await useAsyncData(
+	'my-adapters',
+	async () => {
+		await adaptersStore.fetchMine();
+		return adaptersStore.mineItems.length;
+	},
+	{ server: false }
+);
 
+// defensive owner filter (the server already scopes mine=1 to the current user)
 const mine = computed(() =>
-	adaptersStore.items.filter((a) => a.authorId && a.authorId === user.value?.id)
+	adaptersStore.mineItems.filter((a) => !a.authorId || a.authorId === user.value?.id)
 );
 
 const kpis = computed(() => {
@@ -310,56 +320,36 @@ function canDeleteRow(a: Adapter) {
 	return auth.can('canDeleteAny');
 }
 
-// inline publish: point the upload store at this adapter, push, then poll
-const publishingId = ref<string | null>(null);
+// inline publish: drive THIS adapter's own push state (the server fast-fails a bad token with a clear
+// 403 that surfaces as the row's failed state + message, so no separate client preflight is needed)
 async function publish(adapter: Adapter) {
-	publishingId.value = adapter.id;
-	uploadStore.reset();
-	// reset clears draftId, so set it back to the target adapter
-	uploadStore.draftId = adapter.id;
 	try {
-		await uploadStore.startPublish();
-		toast.add({ title: 'Publish started', color: 'info', icon: 'mdi:cloud-upload' });
-		// wait until the poll settles
-		await waitForPublish();
-		if (uploadStore.status === 'published') {
+		await publishStore.start(adapter.id);
+		toast.add({ title: 'Publish Started', color: 'info', icon: 'mdi:cloud-upload' });
+		await publishStore.settled(adapter.id);
+		const s = publishStore.stateFor(adapter.id);
+		if (s.status === 'published') {
 			toast.add({ title: 'Published', color: 'success', icon: 'mdi:check' });
-		} else if (uploadStore.status === 'failed') {
+		} else if (s.status === 'failed') {
 			toast.add({
-				title: 'Publish failed',
-				description: uploadStore.statusMessage ?? undefined,
+				title: 'Publish Failed',
+				description: s.message ?? undefined,
 				color: 'error',
 				icon: 'mdi:alert'
 			});
 		}
-		await refresh();
 	} catch (e: any) {
+		// fast-fail (e.g. token lacks Workers AI: Edit) - show the actionable server message
 		toast.add({
-			title: 'Publish failed',
-			description: e?.data?.message ?? e?.message,
+			title: 'Publish Failed',
+			description: e?.data?.message ?? e?.data?.statusMessage ?? e?.message,
 			color: 'error',
 			icon: 'mdi:alert'
 		});
 	} finally {
-		publishingId.value = null;
-		uploadStore.reset();
+		await refresh();
+		publishStore.clear(adapter.id);
 	}
-}
-
-// resolve once the upload store stops polling (published/failed)
-function waitForPublish() {
-	return new Promise<void>((resolve) => {
-		const stop = watch(
-			() => uploadStore.polling,
-			(polling) => {
-				if (!polling) {
-					stop();
-					resolve();
-				}
-			},
-			{ immediate: true }
-		);
-	});
 }
 
 // delete confirmation
