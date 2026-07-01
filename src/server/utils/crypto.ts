@@ -81,6 +81,34 @@ async function aesDecrypt(
 	return new Uint8Array(plain);
 }
 
+// the generic envelope: a random dek encrypts the plaintext, the KEK wraps the dek
+export type EncryptedSecret = {
+	cipher: string;
+	iv: string;
+	dekCipher: string;
+	dekIv: string;
+};
+
+// envelope-encrypt any secret string (cf tokens, ssh keys, passphrases, ssh passwords)
+export async function encryptSecret(plaintext: string): Promise<EncryptedSecret> {
+	const kek = await getKek();
+	const dekRaw = crypto.getRandomValues(new Uint8Array(32));
+	const dek = await crypto.subtle.importKey('raw', dekRaw, { name: 'AES-GCM' }, false, [
+		'encrypt',
+		'decrypt'
+	]);
+	const enc = await aesEncrypt(dek, new TextEncoder().encode(plaintext));
+	const wrapped = await aesEncrypt(kek, dekRaw);
+	return { cipher: enc.cipher, iv: enc.iv, dekCipher: wrapped.cipher, dekIv: wrapped.iv };
+}
+
+export async function decryptSecret(rec: EncryptedSecret): Promise<string> {
+	const kek = await getKek();
+	const dekRaw = await aesDecrypt(kek, rec.dekCipher, rec.dekIv);
+	const dek = await crypto.subtle.importKey('raw', dekRaw, { name: 'AES-GCM' }, false, ['decrypt']);
+	return new TextDecoder().decode(await aesDecrypt(dek, rec.cipher, rec.iv));
+}
+
 export type EncryptedToken = {
 	tokenCipher: string;
 	tokenIv: string;
@@ -89,21 +117,14 @@ export type EncryptedToken = {
 	tokenLast4: string;
 };
 
-// envelope-encrypt a token: random dek encrypts the token, the KEK wraps the dek
+// cf-token-shaped wrapper over the generic envelope (keeps the existing column names)
 export async function encryptToken(token: string): Promise<EncryptedToken> {
-	const kek = await getKek();
-	const dekRaw = crypto.getRandomValues(new Uint8Array(32));
-	const dek = await crypto.subtle.importKey('raw', dekRaw, { name: 'AES-GCM' }, false, [
-		'encrypt',
-		'decrypt'
-	]);
-	const tok = await aesEncrypt(dek, new TextEncoder().encode(token));
-	const wrapped = await aesEncrypt(kek, dekRaw);
+	const s = await encryptSecret(token);
 	return {
-		tokenCipher: tok.cipher,
-		tokenIv: tok.iv,
-		dekCipher: wrapped.cipher,
-		dekIv: wrapped.iv,
+		tokenCipher: s.cipher,
+		tokenIv: s.iv,
+		dekCipher: s.dekCipher,
+		dekIv: s.dekIv,
 		tokenLast4: token.slice(-4)
 	};
 }
@@ -114,12 +135,12 @@ export async function decryptToken(rec: {
 	dekCipher: string;
 	dekIv: string;
 }): Promise<string> {
-	const kek = await getKek();
-	const dekRaw = await aesDecrypt(kek, rec.dekCipher, rec.dekIv);
-	const dek = await crypto.subtle.importKey('raw', dekRaw, { name: 'AES-GCM' }, false, ['decrypt']);
-	const tokenBytes = await aesDecrypt(dek, rec.tokenCipher, rec.tokenIv);
-
-	return new TextDecoder().decode(tokenBytes);
+	return decryptSecret({
+		cipher: rec.tokenCipher,
+		iv: rec.tokenIv,
+		dekCipher: rec.dekCipher,
+		dekIv: rec.dekIv
+	});
 }
 
 // detect a wrong/rotated KEK; throws a clear error so callers can tell users to re-enter tokens
