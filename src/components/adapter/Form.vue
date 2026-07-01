@@ -339,18 +339,59 @@
 				</div>
 				<UButton
 					icon="mdi:cloud-upload"
-					:loading="upload.polling"
-					:disabled="upload.status === 'pushing'"
+					:loading="publishing"
+					:disabled="publishing"
 					@click="onPublish"
 				>
 					Publish
 				</UButton>
 			</div>
+
+			<UFormField
+				v-if="cfAccounts.length"
+				label="Cloudflare Account"
+			>
+				<USelectMenu
+					v-model="selectedAccountId"
+					:items="cfAccountItems"
+					value-key="value"
+					:disabled="cfAccounts.length === 1"
+					class="w-full"
+				/>
+			</UFormField>
+			<p
+				v-else
+				class="text-xs text-muted"
+			>
+				No Cloudflare account available - add one in the Cloudflare tab.
+			</p>
+			<!-- proactive heads-up; the server still gives the authoritative result on publish -->
+			<UAlert
+				v-if="preflight?.canPublish === false"
+				color="warning"
+				variant="subtle"
+				icon="mdi:alert"
+				title="Publish May Fail"
+				:description="preflightWarning"
+			/>
+			<p
+				v-else-if="preflight?.canPublish === true"
+				class="flex items-center gap-1 text-xs text-success"
+			>
+				<UIcon name="mdi:shield-check" />
+				{{ preflightSuccess }}
+			</p>
+			<p
+				v-else-if="preflight && preflight.canPublish === null"
+				class="text-xs text-muted"
+			>
+				Cloudflare will confirm the token when you publish.
+			</p>
 			<PushStatus
-				v-if="upload.status && upload.status !== 'draft'"
-				:job="upload.job"
-				:status="upload.status"
-				:status-message="upload.statusMessage"
+				v-if="pushState.status && pushState.status !== 'draft'"
+				:job="pushState.job"
+				:status="pushState.status"
+				:status-message="pushState.message"
 				@retry="onPublish"
 			/>
 		</section>
@@ -386,6 +427,9 @@ const emit = defineEmits<{
 
 const adaptersStore = useAdaptersStore();
 const upload = useUploadStore();
+// per-adapter publish state (kept off the shared upload singleton so publishes never cross-contaminate)
+const publishStore = usePublishStore();
+const cfAccountsStore = useCfAccountsStore();
 const settings = useSettingsStore();
 const auth = useAuthStore();
 const { limits, access } = storeToRefs(settings);
@@ -591,16 +635,102 @@ async function onSubmit(_event: FormSubmitEvent<AdapterInput>) {
 	}
 }
 
+const cfAccounts = ref<PublicCloudflareAccount[]>([]);
+const selectedAccountId = ref<string | undefined>(undefined);
+
+// select options; value is the account id (never empty string)
+const cfAccountItems = computed(() =>
+	cfAccounts.value.map((a) => ({
+		label: `${a.label}${a.isDefault ? ' (Default)' : ''}`,
+		hint: `${a.adapterCount}/100 used`,
+		value: a.id
+	}))
+);
+
+async function loadCfAccounts() {
+	try {
+		cfAccounts.value = await cfAccountsStore.available();
+	} catch {
+		cfAccounts.value = [];
+	}
+	if (selectedAccountId.value && cfAccounts.value.some((a) => a.id === selectedAccountId.value)) {
+		return;
+	}
+
+	// prefer what the server would resolve, then the default account, then the first
+	const resolved = preflight.value?.accountId;
+	selectedAccountId.value =
+		(resolved && cfAccounts.value.some((a) => a.id === resolved) ? resolved : undefined) ??
+		cfAccounts.value.find((a) => a.isDefault)?.id ??
+		cfAccounts.value[0]?.id ??
+		undefined;
+}
+
+// proactive publish preflight: probe whether the SELECTED account's token can publish, as an upfront heads-up
+type Preflight = {
+	canPublish: boolean | null;
+	detail: string;
+	accountLabel: string | null;
+	accountId: string | null;
+};
+const preflight = ref<Preflight | null>(null);
+const preflightWarning = computed(() =>
+	preflight.value
+		? `${preflight.value.detail} Create a Cloudflare API token with Workers AI: Edit and update the hosting account.`
+		: ''
+);
+const preflightSuccess = computed(() => {
+	const label = preflight.value?.accountLabel;
+	return `Token is valid and authorized for Workers AI.${label ? ` (publishing to ${label})` : ''}`;
+});
+
+async function runPreflight() {
+	if (!adapterId.value) return;
+	try {
+		preflight.value = await publishStore.preflight(adapterId.value, selectedAccountId.value);
+	} catch {
+		// undetermined; stay silent
+		preflight.value = null;
+	}
+}
+
+// this adapter's own push state (drives the PushStatus block); read the map directly to avoid
+// mutating store state from inside a computed
+const EMPTY_PUSH = { status: null, job: null, message: null, polling: false, error: null } as const;
+const pushState = computed(() =>
+	adapterId.value ? (publishStore.states[adapterId.value] ?? EMPTY_PUSH) : EMPTY_PUSH
+);
+
+// run once when the publish section is visible for an existing adapter
+watch(
+	() => adapterId.value && canPublish.value,
+	async (shown) => {
+		if (!shown) return;
+		if (!preflight.value) await runPreflight();
+		await loadCfAccounts();
+	},
+	{ immediate: true }
+);
+
+// re-preflight whenever the chosen account changes
+watch(selectedAccountId, () => runPreflight());
+const publishing = computed(() =>
+	adapterId.value ? publishStore.isActive(adapterId.value) : false
+);
+
 async function onPublish() {
+	if (!adapterId.value) return;
 	error.value = '';
 	try {
-		await upload.startPublish();
+		await publishStore.start(adapterId.value, selectedAccountId.value);
 	} catch (e: any) {
-		error.value = e?.data?.message ?? e?.message ?? 'Publish failed';
+		error.value = e?.data?.message ?? e?.data?.statusMessage ?? e?.message ?? 'Publish failed';
+		// re-probe so the warning reflects the now-known-bad token
+		runPreflight();
 	}
 }
 
 onBeforeUnmount(() => {
-	upload.stopPolling();
+	if (adapterId.value) publishStore.stop(adapterId.value);
 });
 </script>
