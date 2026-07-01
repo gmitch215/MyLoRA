@@ -11,6 +11,10 @@ type ListResponse = { items: Adapter[]; total: number; page: number; pageSize: n
 
 export const useAdaptersStore = defineStore('adapters', () => {
 	const items = ref<Adapter[]>([]);
+	// the current user's own adapters, kept SEPARATE from the public grid `items` so the dashboard is
+	// never a filtered/paginated slice of the shared feed (that made owned rows vanish)
+	const mineItems = ref<Adapter[]>([]);
+	const mineLoading = ref(false);
 	const total = ref(0);
 	const loading = ref(false);
 	const error = ref<string | null>(null);
@@ -53,6 +57,23 @@ export const useAdaptersStore = defineStore('adapters', () => {
 		}
 	}
 
+	async function fetchMine() {
+		mineLoading.value = true;
+		error.value = null;
+		try {
+			const res = await $fetch<ListResponse>('/api/adapters/list', {
+				query: { mine: 1, sort: 'newest', pageSize: 200 }
+			});
+			mineItems.value = res.items;
+			return res;
+		} catch (e: any) {
+			error.value = e?.data?.message ?? e?.message ?? 'Failed to load your adapters';
+			throw e;
+		} finally {
+			mineLoading.value = false;
+		}
+	}
+
 	async function fetchOne(slug: string) {
 		loading.value = true;
 		error.value = null;
@@ -84,6 +105,8 @@ export const useAdaptersStore = defineStore('adapters', () => {
 		if (current.value?.id === updated.id) current.value = updated;
 		const idx = items.value.findIndex((a) => a.id === updated.id);
 		if (idx !== -1) items.value[idx] = updated;
+		const midx = mineItems.value.findIndex((a) => a.id === updated.id);
+		if (midx !== -1) mineItems.value[midx] = updated;
 		return updated;
 	}
 
@@ -93,6 +116,7 @@ export const useAdaptersStore = defineStore('adapters', () => {
 			query: { id }
 		});
 		items.value = items.value.filter((a) => a.id !== id);
+		mineItems.value = mineItems.value.filter((a) => a.id !== id);
 		if (current.value?.id === id) current.value = null;
 		return res;
 	}
@@ -126,6 +150,8 @@ export const useAdaptersStore = defineStore('adapters', () => {
 
 	return {
 		items,
+		mineItems,
+		mineLoading,
 		total,
 		loading,
 		error,
@@ -135,6 +161,7 @@ export const useAdaptersStore = defineStore('adapters', () => {
 		page,
 		pageSize,
 		fetchList,
+		fetchMine,
 		fetchOne,
 		create,
 		update,
