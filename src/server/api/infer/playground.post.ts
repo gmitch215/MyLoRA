@@ -74,7 +74,32 @@ export default defineEventHandler(async (event) => {
 			? [{ role: 'system', content: system }, ...messages]
 			: messages;
 
-	const stream = await runInferenceStream(event, target, finalMessages, { maxTokens });
+	// workers AI occasionally returns a transient upstream 5xx (e.g. "internal server error [8008]" /
+	// InferenceUpstreamError) that is not a request problem
+	const transientAi = (e: unknown) =>
+		/internal server error|inferenceupstream|overloaded|capacity|timeout|\b(?:5\d{3}|8\d{3})\]/i.test(
+			String((e as { message?: string })?.message ?? '')
+		);
+	let stream: ReadableStream<Uint8Array>;
+	try {
+		stream = await runInferenceStream(event, target, finalMessages, { maxTokens });
+	} catch (e) {
+		if (transientAi(e)) {
+			try {
+				stream = await runInferenceStream(event, target, finalMessages, { maxTokens });
+			} catch (e2) {
+				throw createError({
+					statusCode: 502,
+					statusMessage: `Cloudflare Workers AI error: ${describeCfError(e2)}. This is usually a temporary upstream issue - try again.`
+				});
+			}
+		} else {
+			throw createError({
+				statusCode: 502,
+				statusMessage: `Inference failed: ${describeCfError(e)}`
+			});
+		}
+	}
 	const record = recordInference(todayUTC(), { model: target.baseModel, audience: 'developer' });
 
 	if (typeof (event as any).waitUntil === 'function') (event as any).waitUntil(record);
