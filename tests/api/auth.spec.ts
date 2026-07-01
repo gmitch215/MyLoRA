@@ -1,5 +1,5 @@
-import { expect, test } from '../fixtures';
 import { TEST_ADMIN } from '../utils/auth';
+import { expect, test } from './fixtures';
 
 test.describe('auth api', () => {
 	test('rejects bad credentials', async ({ request }) => {

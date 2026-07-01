@@ -1,7 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
-import { expect, test } from '../fixtures';
 import { loginViaApi } from '../utils/auth';
 import { createUser, deleteUser } from '../utils/users';
+import { expect, test } from './fixtures';
 
 // remote-training job lifecycle. dev:test runs MYLORA_MOCK_CF=1 -> isMockSsh() is on, so the ssh
 // layer is the deterministic in-memory simulation keyed off the machine host prefix:

@@ -1,5 +1,5 @@
-import { expect, test } from '../fixtures';
 import { loginViaApi } from '../utils/auth';
+import { expect, test } from './fixtures';
 
 const BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8787';
 

@@ -1,5 +1,5 @@
-import { expect, test } from '../fixtures';
 import { createAdapter, deleteAdapter, uploadAssets } from '../utils/adapters';
+import { expect, test } from './fixtures';
 
 test.describe('install.sh', () => {
 	test('emits a wrangler install script for an adapter with files', async ({ request }) => {

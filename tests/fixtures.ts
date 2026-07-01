@@ -13,8 +13,16 @@ export const test = baseTest.extend<{ autoCoverage: void }>({
 			}
 			await use();
 			if (shouldCollect) {
-				const coverage = await page.coverage.stopJSCoverage();
-				if (coverage.length > 0) await addCoverageReport(coverage, testInfo);
+				// never let coverage teardown fail an otherwise-green test: if the test itself timed
+				// out, stopJSCoverage throws "Test ended" and would surface as a confusing failure.
+				// a page that never navigated (url still about:blank) has no coverage worth gathering.
+				try {
+					if (page.url() === 'about:blank') return;
+					const coverage = await page.coverage.stopJSCoverage();
+					if (coverage.length > 0) await addCoverageReport(coverage, testInfo);
+				} catch {
+					// swallow - collection is best-effort, correctness of the test is not
+				}
 			}
 		},
 		{ auto: true }

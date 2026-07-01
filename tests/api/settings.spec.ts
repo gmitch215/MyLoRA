@@ -1,5 +1,5 @@
-import { expect, test } from '../fixtures';
 import { loginViaApi } from '../utils/auth';
+import { expect, test } from './fixtures';
 
 test.describe('settings api', () => {
 	test('public get returns defaults for structured sections', async ({ request }) => {

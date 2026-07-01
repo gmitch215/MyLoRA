@@ -1,5 +1,5 @@
-import { expect, test } from '../fixtures';
 import { loginViaApi } from '../utils/auth';
+import { expect, test } from './fixtures';
 
 // an account id starting with 16 'a's makes the cloudflare mock report two existing finetunes;
 // the rest is randomized so the unique account_id index is not violated across runs

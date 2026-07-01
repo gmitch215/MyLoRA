@@ -1,6 +1,6 @@
-import { expect, test } from '../fixtures';
 import { loginViaApi } from '../utils/auth';
 import { createCfAccount, deleteCfAccount } from '../utils/cf';
+import { expect, test } from './fixtures';
 
 test.describe('cloudflare accounts api', () => {
 	test('never returns the raw token, only last4', async ({ request }) => {

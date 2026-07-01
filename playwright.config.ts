@@ -33,7 +33,8 @@ const reporters: any[] =
 								if (url.startsWith('chrome-extension:')) return false;
 								return url.includes('/_nuxt/') || url.startsWith(BASE_URL);
 							},
-							sourceFilter: (path: string) => path.includes('src/')
+							sourceFilter: (path: string) =>
+								path.includes('src/') && !path.includes('node_modules')
 						}
 					}
 				]
@@ -81,7 +82,9 @@ export default defineConfig({
 				stderr: 'pipe'
 			}
 		: {
-				command: 'bun run dev:test',
+				// coverage runs against a production build + node preview (fast, stable, source-mapped);
+				// the normal lane uses the dev server. build:e2e runs first via the test:coverage script.
+				command: COVERAGE ? 'bun run preview:e2e' : 'bun run dev:test',
 				url: BASE_URL,
 				reuseExistingServer: !isCI,
 				timeout: 240_000,

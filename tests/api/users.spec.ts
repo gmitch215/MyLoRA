@@ -1,6 +1,6 @@
-import { expect, test } from '../fixtures';
 import { loginViaApi } from '../utils/auth';
 import { createUser, deleteUser } from '../utils/users';
+import { expect, test } from './fixtures';
 
 test.describe('admin users api', () => {
 	test('admin can list users', async ({ request }) => {

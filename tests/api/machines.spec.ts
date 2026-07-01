@@ -1,6 +1,6 @@
-import { expect, test } from '../fixtures';
 import { loginViaApi } from '../utils/auth';
 import { createUser, deleteUser } from '../utils/users';
+import { expect, test } from './fixtures';
 
 // remote-training machine endpoints. the dev:test server runs with MYLORA_MOCK_CF=1 which
 // auto-enables the deterministic ssh mock (isMockSsh); diagnoses are keyed off the host prefix.

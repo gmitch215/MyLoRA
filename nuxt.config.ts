@@ -2,8 +2,11 @@ import { defineNuxtConfig } from 'nuxt/config';
 
 import tailwindcss from '@tailwindcss/vite';
 
+const E2E_BUILD = process.env.MYLORA_E2E_BUILD === '1';
+
 export default defineNuxtConfig({
 	...(process.env.NUXT_BUILD_DIR ? { buildDir: process.env.NUXT_BUILD_DIR } : {}),
+	...(E2E_BUILD ? { sourcemap: { client: true, server: false } } : {}),
 	site: {
 		url: process.env.NUXT_PUBLIC_SITE_URL || 'https://mylora.pages.dev'
 	},
@@ -19,7 +22,9 @@ export default defineNuxtConfig({
 				sameSite: 'lax',
 				httpOnly: true,
 				path: '/',
-				secure: process.env.NODE_ENV === 'production'
+				// the e2e build serves over http on 127.0.0.1; a Secure cookie is dropped by
+				// playwright's api request context there, so force it off for that build only
+				secure: !E2E_BUILD && process.env.NODE_ENV === 'production'
 			}
 		},
 		analyticsSalt: process.env.NUXT_ANALYTICS_SALT || 'dev_analytics_salt_change_me_please',
@@ -30,6 +35,9 @@ export default defineNuxtConfig({
 			apiToken: process.env.NUXT_CF_API_TOKEN || ''
 		},
 		public: {
+			// only the dedicated e2e-coverage build sets this; enables the hydration marker plugin
+			// (which is otherwise import.meta.dev-only) so waitForHydration works against the build
+			e2e: E2E_BUILD,
 			site_url: process.env.NUXT_PUBLIC_SITE_URL,
 			name: process.env.NUXT_PUBLIC_NAME || 'MyLoRA',
 			description: process.env.NUXT_PUBLIC_DESCRIPTION || 'A self-hostable LoRA adapter registry',
@@ -77,7 +85,9 @@ export default defineNuxtConfig({
 				'@vue/devtools-core',
 				'@vue/devtools-kit',
 				'@unhead/schema-org/vue',
-				'@unovis/vue'
+				'@unovis/vue',
+				'highlight.js/lib/common',
+				'luxon'
 			]
 		}
 	},
@@ -88,16 +98,21 @@ export default defineNuxtConfig({
 		blob: true,
 		db: 'sqlite'
 	},
-	$production: {
-		nitro: {
-			preset: 'cloudflare-durable',
-			cloudflare: {
-				deployConfig: true,
-				nodeCompat: true
-			}
-		}
-	},
+	// the real deploy build keeps the cloudflare preset; the e2e-coverage build opts out so it can
+	// run under a plain node preview server (nuxthub falls back to its fs/sqlite drivers there)
+	$production: E2E_BUILD
+		? {}
+		: {
+				nitro: {
+					preset: 'cloudflare-durable',
+					cloudflare: {
+						deployConfig: true,
+						nodeCompat: true
+					}
+				}
+			},
 	nitro: {
+		...(E2E_BUILD ? { preset: 'node-server' } : {}),
 		imports: {
 			dirs: ['src/shared']
 		},

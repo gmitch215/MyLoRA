@@ -1,3 +1,5 @@
+import { isNonProdRuntime } from './env';
+
 const API_BASE = 'https://api.cloudflare.com/client/v4';
 
 // thrown by the stubbed single-get/delete endpoints until cloudflare ships them
@@ -10,7 +12,7 @@ export class CfUnsupported extends Error {
 
 export function isMockCf(): boolean {
 	const cfg = useRuntimeConfig();
-	return cfg.mockCf === true && process.env.NODE_ENV !== 'production';
+	return cfg.mockCf === true && isNonProdRuntime();
 }
 
 export function describeCfError(error: unknown): string {

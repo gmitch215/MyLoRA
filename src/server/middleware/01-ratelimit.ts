@@ -1,4 +1,5 @@
 import { getCurrentUser } from '~/server/utils/auth';
+import { isNonProdRuntime } from '~/server/utils/env';
 import { enforceLimit, rateSubject } from '~/server/utils/ratelimit';
 
 // per-class ceilings per 60s window; anonymous gets the heavier limits
@@ -9,13 +10,20 @@ const BASE_LIMITS: Record<string, { anon: number; authed: number }> = {
 	read: { anon: 400, authed: 1200 }
 };
 
-const SCALE = process.env.NODE_ENV === 'production' ? 1 : 50;
-const LIMITS: Record<string, { anon: number; authed: number }> = Object.fromEntries(
-	Object.entries(BASE_LIMITS).map(([k, v]) => [
-		k,
-		{ anon: v.anon * SCALE, authed: v.authed * SCALE }
-	])
-);
+// dev + the e2e-coverage build run 50x looser so the test suite is not throttled; resolved lazily
+// because isNonProdRuntime() reads runtime config, which is not ready at module-eval time
+let _limits: Record<string, { anon: number; authed: number }> | null = null;
+function getLimits() {
+	if (_limits) return _limits;
+	const scale = isNonProdRuntime() ? 50 : 1;
+	_limits = Object.fromEntries(
+		Object.entries(BASE_LIMITS).map(([k, v]) => [
+			k,
+			{ anon: v.anon * scale, authed: v.authed * scale }
+		])
+	);
+	return _limits;
+}
 
 function classify(path: string, method: string): string {
 	if (path.startsWith('/api/login') || path.startsWith('/api/setup')) return 'auth';
@@ -35,7 +43,8 @@ export default defineEventHandler(async (event) => {
 	const cls = classify(path, method);
 	const user = await getCurrentUser(event).catch(() => null);
 	const subject = await rateSubject(event, user);
-	const limit = user ? LIMITS[cls]!.authed : LIMITS[cls]!.anon;
+	const limits = getLimits();
+	const limit = user ? limits[cls]!.authed : limits[cls]!.anon;
 
 	await enforceLimit(event, { cls, subject, limit, windowSeconds: 60 });
 });

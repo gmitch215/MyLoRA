@@ -1,6 +1,6 @@
-import { expect, test } from '../fixtures';
 import { createAdapter, deleteAdapter, publishAdapter, uploadAssets } from '../utils/adapters';
 import { loginViaApi } from '../utils/auth';
+import { expect, test } from './fixtures';
 
 test.describe('adapters api', () => {
 	test('full lifecycle: create -> upload -> listed -> publish -> published', async ({

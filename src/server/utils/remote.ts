@@ -1,3 +1,4 @@
+import { isNonProdRuntime } from './env';
 import {
 	buildAbortCommand,
 	buildLaunchCommand,
@@ -34,7 +35,7 @@ export type RemoteCreds = {
 type CapturedHostKey = { type: string; fingerprint: string };
 
 export function isMockSsh(): boolean {
-	if (process.env.NODE_ENV === 'production') return false;
+	if (!isNonProdRuntime()) return false;
 	if (process.env.MYLORA_MOCK_SSH === '1') return true;
 	// piggyback on the existing cf mock so dev:test (MYLORA_MOCK_CF=1) auto-mocks ssh too
 	try {
