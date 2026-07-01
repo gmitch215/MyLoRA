@@ -74,6 +74,20 @@ over SSH - provision, train, verify, sync back, and optionally publish - with no
 > in production so it survives across environments. If the key ever changes, stored Cloudflare tokens
 > must be re-entered (a KV sentinel detects the mismatch and surfaces a clear error).
 
+### 📥 Installing Updates
+
+If you used this repository as a template and want to pull updates from the original template repository, you can add the template as a remote and merge updates into your repository. The following snippet shows the minimal commands you may use.
+
+```
+# one time, in your repo root, to add the template as a remote
+git remote add template https://github.com/gmitch215/MyLoRA
+
+# to install an update
+git switch master
+git fetch --all
+git merge template -X theirs --allow-unrelated-histories -m "chore: merge upstream"
+```
+
 ## ☁️ Cloudflare Workers AI (LoRA)
 
 Inference uses the **native** Cloudflare Workers AI binding (`process.env.AI`, declared as
