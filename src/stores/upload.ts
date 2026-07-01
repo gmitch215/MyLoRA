@@ -136,6 +136,12 @@ export const useUploadStore = defineStore('upload', () => {
 		}
 	}
 
+	async function publishPreflight(id: string) {
+		return $fetch<{ canPublish: boolean | null; detail: string; accountLabel: string | null }>(
+			`/api/adapters/${id}/publish-preflight`
+		);
+	}
+
 	function reset() {
 		stopPolling();
 		draftId.value = null;
@@ -165,6 +171,7 @@ export const useUploadStore = defineStore('upload', () => {
 		uploadWeights,
 		uploadScreenshot,
 		startPublish,
+		publishPreflight,
 		pollStatus,
 		stopPolling,
 		reset
