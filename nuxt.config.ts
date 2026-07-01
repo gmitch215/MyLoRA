@@ -130,7 +130,9 @@ export default defineNuxtConfig({
 		'@nuxthub/core',
 		'nuxt-auth-utils',
 		'@nuxt/ui',
-		'nuxt-viewport',
+		// nuxt-viewport's client plugin throws a harmless teardown race in the vitest nuxt env and
+		// nothing in src uses useViewport, so skip it under VITEST (dev/build/e2e keep it)
+		...(process.env.VITEST ? [] : ['nuxt-viewport']),
 		'@nuxtjs/robots',
 		'@nuxtjs/sitemap',
 		'nuxt-schema-org',

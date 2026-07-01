@@ -14,9 +14,6 @@ export default defineConfig(async () => ({
 	},
 	test: {
 		globals: true,
-		// nuxt-viewport + mountSuspended leave timers/computeds that throw during teardown (after the
-		// happy-dom window is gone); these are env noise, not test failures, so don't fail the run on them
-		dangerouslyIgnoreUnhandledErrors: true,
 		projects: [
 			{
 				test: {
@@ -29,7 +26,8 @@ export default defineConfig(async () => ({
 				test: {
 					name: 'nuxt',
 					environment: 'nuxt',
-					include: ['tests/unit/{stores,composables,components}/**/*.{test,spec}.ts']
+					include: ['tests/unit/{stores,composables,components}/**/*.{test,spec}.ts'],
+					setupFiles: ['tests/unit/nuxt-setup.ts']
 				}
 			})
 		],
