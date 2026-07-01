@@ -17,7 +17,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Install dependencies
+      - name: Install Dependencies
         run: bun install --frozen-lockfile
       - name: Prepare Nuxt
         run: bunx nuxi prepare

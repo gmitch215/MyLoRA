@@ -7,3 +7,4 @@ package-lock.json
 LICENSE
 tsconfig.json
 tailwind.config.js
+.husky/_/

@@ -167,7 +167,7 @@ recovered after a stall window.
 
 ```bash
 bun install
-bun run dev            # http://localhost:8787
+bun run dev # http://localhost:8787
 ```
 
 On first run, every visitor is redirected to `/setup` to create the root administrator.
