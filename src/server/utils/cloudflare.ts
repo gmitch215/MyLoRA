@@ -212,35 +212,35 @@ export async function uploadFinetuneAsset(
 	token: string,
 	finetuneId: string,
 	fileName: string,
-	body: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
+	body:
+		ReadableStream<Uint8Array<ArrayBuffer>> | Blob | ArrayBuffer | Uint8Array<ArrayBuffer> | string
 ): Promise<void> {
 	if (isMockCf()) return;
-	// normalize whatever the blob store handed us to real bytes, then send a fresh, explicitly-typed
-	// Blob. wrapping a non-Blob object in `new Blob([obj])` can serialize to "[object Object]" and yield
-	// a malformed multipart part, which cloudflare rejects with an opaque "internal error"
+
 	const bytes =
-		body instanceof Uint8Array
-			? body
-			: body instanceof ArrayBuffer
-				? new Uint8Array(body)
-				: body instanceof Blob
-					? new Uint8Array(await body.arrayBuffer())
-					: new Uint8Array(await new Response(body as BodyInit).arrayBuffer());
+		typeof body === 'string'
+			? new TextEncoder().encode(body)
+			: body instanceof Uint8Array
+				? body
+				: body instanceof ArrayBuffer
+					? new Uint8Array(body)
+					: body instanceof Blob
+						? new Uint8Array(await body.arrayBuffer())
+						: new Uint8Array(await new Response(body as BodyInit).arrayBuffer());
 	const type = fileName.endsWith('.json') ? 'application/json' : 'application/octet-stream';
+
 	// a multipart body cannot be replayed, so rebuild the form per attempt
 	const attempt = () => {
 		const form = new FormData();
 		form.set('file_name', fileName);
 		form.set('file', new Blob([bytes], { type }), fileName);
-		// NO trailing slash: the real API route is /finetune-assets (a trailing slash 404s with
-		// "Route not found [1000]", despite the trailing slash shown in the docs' curl example)
+
 		return cfFetch(token, `/accounts/${accountId}/ai/finetunes/${finetuneId}/finetune-assets`, {
 			method: 'POST',
 			body: form
 		});
 	};
-	// cloudflare's asset endpoint occasionally 5xx's ("internal error; reference = ..."); retry a few
-	// times with backoff before giving up, since those are almost always transient
+
 	const MAX_ATTEMPTS = 3;
 	for (let i = 1; i <= MAX_ATTEMPTS; i++) {
 		try {
