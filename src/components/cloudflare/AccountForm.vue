@@ -63,6 +63,47 @@
 			/>
 		</UFormField>
 
+		<div
+			v-if="isEdit"
+			class="space-y-3"
+		>
+			<UButton
+				icon="mdi:shield-check"
+				color="neutral"
+				variant="outline"
+				size="sm"
+				:loading="checking"
+				@click="onCheckPublish"
+			>
+				Check Publish Permission
+			</UButton>
+
+			<UAlert
+				v-if="publishResult === true"
+				color="success"
+				variant="subtle"
+				icon="mdi:check-circle"
+				title="Can Publish"
+				description="This token can publish (Workers AI: Edit)."
+			/>
+			<UAlert
+				v-else-if="publishResult === false"
+				color="error"
+				variant="subtle"
+				icon="mdi:close-circle"
+				title="No Publish Permission"
+				:description="`${publishDetail} Create a token with Workers AI: Edit and update this account.`"
+			/>
+			<UAlert
+				v-else-if="publishChecked"
+				color="warning"
+				variant="subtle"
+				icon="mdi:help-circle"
+				title="Unknown"
+				:description="publishDetail || 'Could not determine publish permission.'"
+			/>
+		</div>
+
 		<div class="flex flex-col gap-3 sm:flex-row sm:gap-6">
 			<UFormField
 				name="shared"
@@ -145,6 +186,31 @@ const scopeItems = [
 
 const loading = ref(false);
 const error = ref('');
+
+// publish-permission preflight state (edit only)
+const checking = ref(false);
+const publishChecked = ref(false);
+const publishResult = ref<boolean | null>(null);
+const publishDetail = ref('');
+
+async function onCheckPublish() {
+	if (!props.account?.id) return;
+	checking.value = true;
+	publishChecked.value = false;
+	try {
+		const res = await store.preflight(props.account.id);
+		publishResult.value = res.canPublish;
+		publishDetail.value = res.detail;
+		publishChecked.value = true;
+	} catch (e: any) {
+		publishResult.value = null;
+		publishDetail.value =
+			e?.data?.message ?? e?.message ?? 'Could not determine publish permission.';
+		publishChecked.value = true;
+	} finally {
+		checking.value = false;
+	}
+}
 
 async function onSubmit(_event: FormSubmitEvent<any>) {
 	loading.value = true;

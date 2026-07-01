@@ -26,6 +26,21 @@
 			<template #tokenLast4-cell="{ row }">
 				<span class="font-mono text-muted"> **** {{ row.original.tokenLast4 || '????' }} </span>
 			</template>
+			<template #tokenScope-cell="{ row }">
+				<div class="flex flex-col gap-1">
+					<span class="text-muted text-sm">{{ scopeLabel(row.original.tokenScope) }}</span>
+					<UBadge
+						v-if="publishStatus[row.original.id]"
+						:color="publishBadge(row.original.id).color"
+						:icon="publishBadge(row.original.id).icon"
+						variant="subtle"
+						size="sm"
+						class="w-fit"
+					>
+						{{ publishBadge(row.original.id).label }}
+					</UBadge>
+				</div>
+			</template>
 			<template #shared-cell="{ row }">
 				<UBadge
 					:color="row.original.shared ? 'info' : 'neutral'"
@@ -62,6 +77,15 @@
 						title="Sync"
 						:loading="syncingId === row.original.id"
 						@click="onSync(row.original.id)"
+					/>
+					<UButton
+						icon="mdi:shield-check"
+						size="xs"
+						variant="ghost"
+						color="neutral"
+						title="Verify Publish Permission"
+						:loading="verifyingId === row.original.id"
+						@click="onVerify(row.original.id)"
 					/>
 					<UButton
 						icon="mdi:pencil"
@@ -152,7 +176,24 @@ const columns = [
 const formOpen = ref(false);
 const editing = ref<PublicCloudflareAccount | null>(null);
 const syncingId = ref<string | null>(null);
+const verifyingId = ref<string | null>(null);
 const deletingId = ref<string | null>(null);
+
+// per-row publish-permission result keyed by account id
+const publishStatus = reactive<Record<string, boolean | null>>({});
+
+function scopeLabel(scope: string) {
+	return scope === 'readonly' ? 'Read Only' : 'Read + Write';
+}
+
+function publishBadge(id: string) {
+	const status = publishStatus[id];
+	if (status === true)
+		return { color: 'success' as const, icon: 'mdi:check-circle', label: 'Can Publish' };
+	if (status === false)
+		return { color: 'error' as const, icon: 'mdi:close-circle', label: 'No Publish Permission' };
+	return { color: 'neutral' as const, icon: 'mdi:help-circle', label: 'Unknown' };
+}
 const confirmOpen = ref(false);
 const pendingDelete = ref<PublicCloudflareAccount | null>(null);
 
@@ -166,6 +207,11 @@ function rowMenu(account: PublicCloudflareAccount) {
 	return [
 		[
 			{ label: 'Sync', icon: 'mdi:refresh', onSelect: () => onSync(account.id) },
+			{
+				label: 'Verify Publish Permission',
+				icon: 'mdi:shield-check',
+				onSelect: () => onVerify(account.id)
+			},
 			{ label: 'Edit', icon: 'mdi:pencil', onSelect: () => openEdit(account) }
 		],
 		[
@@ -198,6 +244,46 @@ async function onSync(id: string) {
 		toast.add({ title: e?.data?.message ?? 'Sync failed', color: 'error', icon: 'mdi:alert' });
 	} finally {
 		syncingId.value = null;
+	}
+}
+
+// probe the token's real publish permission without side effects
+async function onVerify(id: string) {
+	verifyingId.value = id;
+	try {
+		const res = await store.preflight(id);
+		publishStatus[id] = res.canPublish;
+		if (res.canPublish === true) {
+			toast.add({
+				title: 'Can Publish',
+				description: 'This token can publish (Workers AI: Edit).',
+				color: 'success',
+				icon: 'mdi:check'
+			});
+		} else if (res.canPublish === false) {
+			toast.add({
+				title: 'No Publish Permission',
+				description: res.detail,
+				color: 'error',
+				icon: 'mdi:alert'
+			});
+		} else {
+			toast.add({
+				title: 'Unknown',
+				description: res.detail || 'Could not determine publish permission.',
+				color: 'warning',
+				icon: 'mdi:help-circle'
+			});
+		}
+	} catch (e: any) {
+		publishStatus[id] = null;
+		toast.add({
+			title: e?.data?.message ?? 'Verification failed',
+			color: 'error',
+			icon: 'mdi:alert'
+		});
+	} finally {
+		verifyingId.value = null;
 	}
 }
 
