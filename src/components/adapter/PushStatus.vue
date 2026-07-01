@@ -1,5 +1,46 @@
 <template>
-	<div class="space-y-4">
+	<div
+		v-if="compact"
+		class="space-y-1"
+	>
+		<div class="flex items-center gap-2">
+			<AppSpinner
+				v-if="isPushing"
+				size="sm"
+				class="size-3.5! text-primary shrink-0"
+			/>
+			<UIcon
+				v-else
+				:name="pushIcon"
+				:class="pushIconClass"
+				class="size-3.5 shrink-0"
+			/>
+			<span
+				class="text-xs"
+				:class="isError ? 'text-error' : 'text-muted'"
+				>{{ phaseLabel }}</span
+			>
+		</div>
+		<UProgress
+			v-if="showProgress"
+			:model-value="isDone ? 100 : isPushing ? undefined : 0"
+			:max="100"
+			:color="isDone ? 'success' : 'primary'"
+			:animation="isPushing ? 'carousel' : undefined"
+			size="xs"
+		/>
+		<p
+			v-if="isError && (statusMessage || job?.error)"
+			class="text-xs text-error"
+		>
+			{{ statusMessage || job?.error }}
+		</p>
+	</div>
+
+	<div
+		v-else
+		class="space-y-4"
+	>
 		<div class="flex items-center gap-3">
 			<UIcon
 				:name="r2Done ? 'mdi:check-circle' : 'mdi:circle-outline'"
@@ -14,7 +55,13 @@
 
 		<div class="rounded border border-default p-3 space-y-3 bg-elevated/30">
 			<div class="flex items-center gap-3">
+				<AppSpinner
+					v-if="isPushing"
+					size="lg"
+					class="size-5! text-primary shrink-0"
+				/>
 				<UIcon
+					v-else
 					:name="pushIcon"
 					:class="pushIconClass"
 					class="size-5 shrink-0"
@@ -72,6 +119,7 @@ const props = defineProps<{
 	job: PushJob | null;
 	status: AdapterStatus;
 	statusMessage?: string | null;
+	compact?: boolean;
 }>();
 
 const emit = defineEmits<{ retry: [] }>();
@@ -121,7 +169,7 @@ const phaseLabel = computed(() => {
 const pushIcon = computed(() => {
 	if (isError.value) return 'mdi:alert-circle';
 	if (isDone.value) return 'mdi:check-circle';
-	if (isPushing.value) return 'mdi:loading';
+	if (isPushing.value) return 'i-lucide-loader-circle';
 	return 'mdi:circle-outline';
 });
 
