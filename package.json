@@ -45,7 +45,7 @@
     "edgeport": "^1.0.2",
     "highlight.js": "^11.11.1",
     "luxon": "^3.7.2",
-    "marked": "^16.4.2",
+    "marked": "^18.0.0",
     "nuxt": "^4.4.8",
     "nuxt-auth-utils": "^0.5.29",
     "nuxt-schema-org": "^6.2.3",
