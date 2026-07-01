@@ -68,6 +68,11 @@ const navItems = computed(() => {
 	if (auth.can('canManageAccounts')) {
 		items.push({ label: 'Cloudflare', icon: 'mdi:cloud', to: '/dashboard/cloudflare' });
 	}
+	// remote training: trainers and machine managers
+	if (auth.can('canTrain') || auth.can('canManageMachines')) {
+		items.push({ label: 'Training', icon: 'i-lucide-cpu', to: '/dashboard/training' });
+		items.push({ label: 'Machines', icon: 'i-lucide-server', to: '/dashboard/machines' });
+	}
 	// settings is manager+; analytics + users are admin-only
 	if (auth.isManager) {
 		items.push({ label: 'Settings', icon: 'mdi:cog', to: '/dashboard/settings' });
