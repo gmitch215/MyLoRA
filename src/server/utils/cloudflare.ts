@@ -19,13 +19,35 @@ export function describeCfError(error: unknown): string {
 	while (current && !seen.has(current)) {
 		seen.add(current);
 		if (Array.isArray(current?.errors) && current.errors.length) {
-			const e = current.errors[0];
-			return e?.message ? `${e.message}${e.code ? ` [${e.code}]` : ''}` : String(current);
+			// surface EVERY error cloudflare returned (with codes) so a failure is never ambiguous
+			const all = current.errors
+				.map((e: any) => (e?.message ? `${e.message}${e.code ? ` [${e.code}]` : ''}` : null))
+				.filter(Boolean);
+			if (all.length) return all.join('; ');
 		}
 		if (current?.message) return current.message;
 		current = current?.cause;
 	}
 	return String(error);
+}
+
+// turn a raw cf error into actionable guidance for the common token-permission rejection. the REST
+// call is correct - ACTION_NOT_AUTHORIZED means the token authenticates but lacks the finetune-create
+// permission (or the account cannot create public finetunes), so the fix is on the token, not the code
+export function explainCfError(error: unknown): string {
+	const raw = describeCfError(error);
+	// include the exact endpoint we hit (account id is fine; no token is ever in the url)
+	const u = (error as any)?.url as string | undefined;
+	const m = (error as any)?.method as string | undefined;
+	const where = u ? ` (Request: ${m || 'GET'} ${u})` : '';
+	if (
+		/ACTION_NOT_AUTHORIZED|not authoriz|unauthoriz|permission|forbidden|authentication error/i.test(
+			raw
+		)
+	) {
+		return `${raw} - the Cloudflare API token is not authorized for this action. Create a token with "Workers AI: Edit" (and an account allowed to create finetunes), then update this account; a read-only token can list finetunes but cannot publish.${where}`;
+	}
+	return `${raw}${where}`;
 }
 
 // http status attached to a thrown cf error (if any)
@@ -48,7 +70,8 @@ export function isTransientCfError(error: unknown): boolean {
 	const status = cfErrorStatus(error);
 	if (status && status >= 500) return true;
 	const msg = describeCfError(error).toLowerCase();
-	return /network connection|connection lost|connection reset|timed? ?out|fetch failed|terminated|socket/.test(
+	// "internal error; reference = ..." is cloudflare's own 5xx page (retryable); the rest are transport
+	return /internal error|reference =|network connection|connection lost|connection reset|timed? ?out|fetch failed|terminated|socket|request failed/.test(
 		msg
 	);
 }
@@ -58,13 +81,25 @@ async function cfFetch<T>(
 	path: string,
 	init: RequestInit & { raw?: BodyInit } = {}
 ): Promise<T> {
-	const res = await fetch(`${API_BASE}${path}`, {
-		...init,
-		headers: {
-			Authorization: `Bearer ${token}`,
-			...(init.headers || {})
-		}
-	});
+	// the url carries the account id but NOT the token (that's an Authorization header), so it is safe
+	// to attach to errors for diagnostics
+	const url = `${API_BASE}${path}`;
+	const method = String(init.method || 'GET').toUpperCase();
+	let res: Response;
+	try {
+		res = await fetch(url, {
+			...init,
+			headers: {
+				Authorization: `Bearer ${token}`,
+				...(init.headers || {})
+			}
+		});
+	} catch (e) {
+		const err = new Error(`Cloudflare request failed: ${(e as Error)?.message ?? String(e)}`);
+		(err as any).url = url;
+		(err as any).method = method;
+		throw err;
+	}
 	const text = await res.text();
 	let json: any = null;
 	try {
@@ -76,6 +111,8 @@ async function cfFetch<T>(
 		const err = new Error(describeCfError(json) || `Cloudflare error ${res.status}`);
 		(err as any).status = res.status;
 		(err as any).errors = json?.errors;
+		(err as any).url = url;
+		(err as any).method = method;
 		throw err;
 	}
 	return (json?.result ?? json) as T;
@@ -97,18 +134,75 @@ export async function verifyToken(accountId: string, token: string): Promise<boo
 	return true;
 }
 
+export type FinetunePermission = { canPublish: boolean | null; detail: string };
+
+export async function checkFinetuneWritePermission(
+	accountId: string,
+	token: string
+): Promise<FinetunePermission> {
+	if (isMockCf()) {
+		// a token marked read-only (test fixture) simulates a no-publish token
+		const canPublish = !/readonly|read-only|noperm/i.test(token);
+		return {
+			canPublish,
+			detail: canPublish
+				? 'Token is valid and authorized for Workers AI.'
+				: 'Token lacks Workers AI: Edit.'
+		};
+	}
+	// 1) confirm the token authenticates + is active (a disabled/expired token can never publish)
+	try {
+		const v = await cfFetch<{ status?: string }>(token, `/user/tokens/verify`, { method: 'GET' });
+		if (v?.status && v.status !== 'active')
+			return { canPublish: false, detail: `Token is ${v.status} - re-create it.` };
+	} catch (e) {
+		const status = cfErrorStatus(e);
+		if (status === 401 || status === 403)
+			return { canPublish: false, detail: 'Token is invalid or expired - re-create it.' };
+		// verify unreachable -> fall through to the finetune probe rather than blocking
+	}
+	// 2) probe the finetune-create authorization on THIS account
+	try {
+		await cfFetch(token, `/accounts/${accountId}/ai/finetunes`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({})
+		});
+		return { canPublish: true, detail: 'Token is valid and authorized for Workers AI.' };
+	} catch (e) {
+		const status = cfErrorStatus(e);
+		const msg = describeCfError(e);
+		if (status === 401)
+			return { canPublish: false, detail: 'Token is invalid or expired - re-create it.' };
+		if (
+			status === 403 ||
+			/ACTION_NOT_AUTHORIZED|not authoriz|unauthoriz|forbidden|permission/i.test(msg)
+		)
+			return {
+				canPublish: false,
+				detail: 'Token lacks Workers AI: Edit on this account (cannot create finetunes).'
+			};
+		// authorized (gateway let it through) - only the empty body was rejected, nothing created
+		if (status === 400)
+			return { canPublish: true, detail: 'Token is valid and authorized for Workers AI.' };
+		return { canPublish: null, detail: msg };
+	}
+}
+
 export async function createFinetune(
 	accountId: string,
 	token: string,
-	body: { model: string; name: string; description?: string; public?: boolean }
+	body: { model: string; name: string; description?: string }
 ): Promise<FinetuneRecord> {
 	if (isMockCf()) {
-		return { id: `mock-${body.name}`, name: body.name, model: body.model, public: body.public };
+		return { id: `mock-${body.name}`, name: body.name, model: body.model };
 	}
+	// the official LoRA REST flow posts ONLY model/name/description; sending extra fields (e.g. `public`)
+	// can trip an account-entitlement check and surface as ACTION_NOT_AUTHORIZED
 	return cfFetch<FinetuneRecord>(token, `/accounts/${accountId}/ai/finetunes`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(body)
+		body: JSON.stringify({ model: body.model, name: body.name, description: body.description })
 	});
 }
 
@@ -121,19 +215,46 @@ export async function uploadFinetuneAsset(
 	body: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
 ): Promise<void> {
 	if (isMockCf()) return;
-	const form = new FormData();
-	form.set('file_name', fileName);
-	const blob = body instanceof Blob ? body : new Blob([body as BlobPart]);
-	form.set('file', blob, fileName);
-	try {
-		await cfFetch(token, `/accounts/${accountId}/ai/finetunes/${finetuneId}/finetune-assets`, {
+	// normalize whatever the blob store handed us to real bytes, then send a fresh, explicitly-typed
+	// Blob. wrapping a non-Blob object in `new Blob([obj])` can serialize to "[object Object]" and yield
+	// a malformed multipart part, which cloudflare rejects with an opaque "internal error"
+	const bytes =
+		body instanceof Uint8Array
+			? body
+			: body instanceof ArrayBuffer
+				? new Uint8Array(body)
+				: body instanceof Blob
+					? new Uint8Array(await body.arrayBuffer())
+					: new Uint8Array(await new Response(body as BodyInit).arrayBuffer());
+	const type = fileName.endsWith('.json') ? 'application/json' : 'application/octet-stream';
+	// a multipart body cannot be replayed, so rebuild the form per attempt
+	const attempt = () => {
+		const form = new FormData();
+		form.set('file_name', fileName);
+		form.set('file', new Blob([bytes], { type }), fileName);
+		// NO trailing slash: the real API route is /finetune-assets (a trailing slash 404s with
+		// "Route not found [1000]", despite the trailing slash shown in the docs' curl example)
+		return cfFetch(token, `/accounts/${accountId}/ai/finetunes/${finetuneId}/finetune-assets`, {
 			method: 'POST',
 			body: form
 		});
-	} catch (e) {
-		// cloudflare dedupes identical configs; a conflict means the asset is already attached
-		if (isBenignCfError(e)) return;
-		throw e;
+	};
+	// cloudflare's asset endpoint occasionally 5xx's ("internal error; reference = ..."); retry a few
+	// times with backoff before giving up, since those are almost always transient
+	const MAX_ATTEMPTS = 3;
+	for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+		try {
+			await attempt();
+			return;
+		} catch (e) {
+			// cloudflare dedupes identical configs; a conflict means the asset is already attached
+			if (isBenignCfError(e)) return;
+			if (isTransientCfError(e) && i < MAX_ATTEMPTS) {
+				await new Promise((r) => setTimeout(r, 800 * i));
+				continue;
+			}
+			throw e;
+		}
 	}
 }
 
