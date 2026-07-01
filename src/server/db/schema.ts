@@ -137,8 +137,166 @@ export const downloads = sqliteTable(
 	(t) => [index('idx_downloads_adapter_day').on(t.adapterId, t.day)]
 );
 
+export const machines = sqliteTable(
+	'machines',
+	{
+		id: text('id').primaryKey(),
+		label: text('label').notNull(),
+		ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),
+		// shared machines are usable by anyone who canTrain; personal ones only by the owner
+		shared: integer('shared', { mode: 'boolean' }).notNull().default(false),
+		// generic host+port (a public ip, a cloud dns name, or an ngrok forwarding host) - never "ip"
+		host: text('host').notNull(),
+		port: integer('port').notNull().default(22),
+		username: text('username').notNull(),
+		authMethod: text('auth_method', { enum: ['key', 'password'] })
+			.notNull()
+			.default('key'),
+		connectionType: text('connection_type', { enum: ['vps', 'tunnel'] })
+			.notNull()
+			.default('vps'),
+		// envelope-encrypted private key (pkcs8 pem); null for password auth
+		keyCipher: text('key_cipher'),
+		keyIv: text('key_iv'),
+		keyDekCipher: text('key_dek_cipher'),
+		keyDekIv: text('key_dek_iv'),
+		// envelope-encrypted key passphrase (optional)
+		passphraseCipher: text('passphrase_cipher'),
+		passphraseIv: text('passphrase_iv'),
+		passphraseDekCipher: text('passphrase_dek_cipher'),
+		passphraseDekIv: text('passphrase_dek_iv'),
+		// envelope-encrypted ssh password; null for key auth
+		passwordCipher: text('password_cipher'),
+		passwordIv: text('password_iv'),
+		passwordDekCipher: text('password_dek_cipher'),
+		passwordDekIv: text('password_dek_iv'),
+		// generated = we made the keypair in-worker; provided = user pasted their own key
+		keySource: text('key_source', { enum: ['generated', 'provided'] }),
+		// the public openssh line the user installs in authorized_keys (not secret)
+		publicKey: text('public_key'),
+		keyLast4: text('key_last4'),
+		// pinned host key (tofu) - flags man-in-the-middle if it later changes
+		hostKeyFingerprint: text('host_key_fingerprint'),
+		hostKeyType: text('host_key_type'),
+		// health snapshot from the last test/preflight
+		healthStatus: text('health_status', {
+			enum: ['unchecked', 'unknown', 'ok', 'unreachable', 'auth_failed', 'degraded']
+		})
+			.notNull()
+			.default('unchecked'),
+		lastDiagnosis: text('last_diagnosis'),
+		lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }),
+		// json {name, vramMb, vramUsedMb} from nvidia-smi (primary gpu)
+		gpuInfo: text('gpu_info'),
+		// json SystemInfo snapshot (cpu/ram/disk/os/user/all gpus) from the last preflight
+		systemInfo: text('system_info'),
+		toolingReady: integer('tooling_ready', { mode: 'boolean' }).notNull().default(false),
+		// sha-256 hashed token a home box uses to self-report its current ngrok address
+		selfReportTokenHash: text('self_report_token_hash'),
+		isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`),
+		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`)
+	},
+	(t) => [index('idx_machines_owner').on(t.ownerId)]
+);
+
+export const trainingJobs = sqliteTable(
+	'training_jobs',
+	{
+		id: text('id').primaryKey(),
+		machineId: text('machine_id').references(() => machines.id, { onDelete: 'set null' }),
+		authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
+		engine: text('engine', { enum: ['doc2lora', 'peft', 'accelerate'] }).notNull(),
+		// queued -> provisioning -> launching -> running -> syncing -> verifying -> publishing -> completed
+		// terminal: failed / abnormal / aborted
+		status: text('status', {
+			enum: [
+				'queued',
+				'provisioning',
+				'launching',
+				'running',
+				'syncing',
+				'verifying',
+				'publishing',
+				'completed',
+				'failed',
+				'abnormal',
+				'aborted'
+			]
+		})
+			.notNull()
+			.default('queued'),
+		statusMessage: text('status_message'),
+		failureClass: text('failure_class', {
+			enum: ['none', 'reported', 'abnormal', 'preflight', 'verify', 'sync', 'aborted', 'gated']
+		})
+			.notNull()
+			.default('none'),
+		// r2 ref for the uploaded dataset/docs
+		datasetId: text('dataset_id'),
+		inputKind: text('input_kind', { enum: ['documents', 'dataset'] })
+			.notNull()
+			.default('documents'),
+		// full training config snapshot (json) so a settings change mid-run is not retroactive
+		config: text('config').notNull(),
+		autoPublish: integer('auto_publish', { mode: 'boolean' }).notNull().default(false),
+		autoUploadFinetune: integer('auto_upload_finetune', { mode: 'boolean' })
+			.notNull()
+			.default(false),
+		accountId: text('account_id').references(() => cloudflareAccounts.id, { onDelete: 'set null' }),
+		// optional per-job huggingface token (gated models / private datasets), envelope-encrypted
+		hfTokenCipher: text('hf_token_cipher'),
+		hfTokenIv: text('hf_token_iv'),
+		hfTokenDekCipher: text('hf_token_dek_cipher'),
+		hfTokenDekIv: text('hf_token_dek_iv'),
+		// true when the trained adapter is not CF-deployable (non-CF PEFT base): R2 download only
+		downloadOnly: integer('download_only', { mode: 'boolean' }).notNull().default(false),
+		// runtime state mirrored from the durable object
+		pid: integer('pid'),
+		pgid: integer('pgid'),
+		wrapperId: text('wrapper_id'),
+		jobDir: text('job_dir'),
+		startedAt: integer('started_at', { mode: 'timestamp_ms' }),
+		finishedAt: integer('finished_at', { mode: 'timestamp_ms' }),
+		lastHeartbeatAt: integer('last_heartbeat_at', { mode: 'timestamp_ms' }),
+		lastProbeAt: integer('last_probe_at', { mode: 'timestamp_ms' }),
+		// auto-expiring advisory lease: only one driver (cron / poll / DO alarm) advances a job at a time
+		lockedAt: integer('locked_at', { mode: 'timestamp_ms' }),
+		// json JobTelemetry: latest live box sample (cpu/ram/vram/disk/net/output size) from the probe
+		telemetry: text('telemetry'),
+		consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+		attempt: integer('attempt').notNull().default(0),
+		nextPollAt: integer('next_poll_at', { mode: 'timestamp_ms' }),
+		logTail: text('log_tail'),
+		// result
+		adapterId: text('adapter_id').references(() => adapters.id, { onDelete: 'set null' }),
+		adapterSha: text('adapter_sha'),
+		adapterSize: integer('adapter_size'),
+		etaSeconds: integer('eta_seconds'),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`),
+		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`)
+	},
+	(t) => [
+		index('idx_jobs_author').on(t.authorId),
+		index('idx_jobs_machine').on(t.machineId),
+		index('idx_jobs_status').on(t.status)
+	]
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type Machine = typeof machines.$inferSelect;
+export type NewMachine = typeof machines.$inferInsert;
+export type TrainingJob = typeof trainingJobs.$inferSelect;
+export type NewTrainingJob = typeof trainingJobs.$inferInsert;
 export type Adapter = typeof adapters.$inferSelect;
 export type NewAdapter = typeof adapters.$inferInsert;
 export type CloudflareAccount = typeof cloudflareAccounts.$inferSelect;
