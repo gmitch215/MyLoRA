@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { H3Event } from 'h3';
 import { db } from 'hub:db';
 import { adapters, users } from 'hub:db:schema';
+import { capsCacheKey, tryCache } from './cache';
 import { getPermissions } from './settings';
 
 export type SessionUser = {
@@ -48,8 +49,9 @@ export async function requireDeveloper(event: H3Event): Promise<SessionUser> {
 
 // resolve a capability for a user against the settings permission matrix
 export async function capabilitiesFor(role: Role): Promise<Capability> {
-	const permissions = await getPermissions();
-	return capabilityFor(role, permissions);
+	// admins are always all-caps with no settings read; other roles are cached (busted by settings.post)
+	if (role === 'administrator') return ADMIN_CAPABILITY;
+	return tryCache(capsCacheKey(role), async () => capabilityFor(role, await getPermissions()), 60);
 }
 
 export async function hasCapability(

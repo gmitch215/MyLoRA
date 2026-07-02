@@ -29,21 +29,33 @@ async function bump(k: string, by: number, ttl: number): Promise<number> {
 }
 
 // fixed-window counter; throws 429 when the ceiling is reached
+// in-isolate fixed-window counters for the global middleware limiter. it runs on EVERY /api request,
+// and workers KV round-trips (~100-300ms cold) dominated request latency; memory counting is per-isolate
+// (best-effort, as the kv path already was) but adds zero i/o. the inference budget below stays on KV
+const memCounts = new Map<string, number>();
+
 export async function enforceLimit(
 	event: H3Event,
 	opts: { cls: string; subject: string; limit: number; windowSeconds: number }
 ): Promise<void> {
 	if (opts.limit <= 0) return;
 	const bucket = Math.floor(Date.now() / (opts.windowSeconds * 1000));
-	const k = `mylora:rl:${opts.cls}:${opts.subject}:${bucket}`;
-	const current = await readCount(k);
+	const k = `${opts.cls}:${opts.subject}:${bucket}`;
+	const current = memCounts.get(k) ?? 0;
 	if (current >= opts.limit) {
 		const reset =
 			opts.windowSeconds - Math.floor((Date.now() % (opts.windowSeconds * 1000)) / 1000);
 		setResponseHeader(event, 'Retry-After', reset);
 		throw createError({ statusCode: 429, statusMessage: 'Too many requests' });
 	}
-	await bump(k, 1, opts.windowSeconds);
+	memCounts.set(k, current + 1);
+	// prune stale buckets so the map cannot grow unbounded across windows
+	if (memCounts.size > 5000) {
+		for (const key of memCounts.keys()) {
+			memCounts.delete(key);
+			if (memCounts.size <= 2500) break;
+		}
+	}
 }
 
 // resolve the rate subject: hashed ip for anon, user id for authed
