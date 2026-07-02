@@ -88,12 +88,39 @@
 				name="favicon"
 				help="Upload an ICO file, paste a URL, or enter a relative path"
 			>
-				<UInput
-					v-model="state.favicon"
-					placeholder="/favicon.ico"
-					class="w-full"
-					:disabled="loading"
-				/>
+				<div class="space-y-2">
+					<UInput
+						v-model="state.favicon"
+						placeholder="/favicon.ico"
+						class="w-full"
+						:disabled="loading || !!faviconFile"
+					/>
+					<UFileUpload
+						v-model="faviconFile"
+						accept=".ico,image/x-icon,image/png"
+						label="Upload Favicon"
+						:disabled="loading"
+					/>
+					<div
+						v-if="faviconPreview || (state.favicon && !faviconFile)"
+						class="flex items-center gap-2"
+					>
+						<img
+							:src="faviconPreview || state.favicon"
+							alt="Favicon preview"
+							class="size-8 rounded border border-default"
+						/>
+						<UButton
+							icon="mdi:close"
+							color="error"
+							size="xs"
+							variant="ghost"
+							@click="clearFavicon"
+						>
+							Remove
+						</UButton>
+					</div>
+				</div>
 			</UFormField>
 
 			<UFormField
@@ -101,12 +128,39 @@
 				name="faviconPng"
 				help="Upload a PNG, paste a URL, or enter a relative path"
 			>
-				<UInput
-					v-model="state.faviconPng"
-					placeholder="/favicon.png"
-					class="w-full"
-					:disabled="loading"
-				/>
+				<div class="space-y-2">
+					<UInput
+						v-model="state.faviconPng"
+						placeholder="/favicon.png"
+						class="w-full"
+						:disabled="loading || !!faviconPngFile"
+					/>
+					<UFileUpload
+						v-model="faviconPngFile"
+						accept="image/png"
+						label="Upload PNG Favicon"
+						:disabled="loading"
+					/>
+					<div
+						v-if="faviconPngPreview || (state.faviconPng && !faviconPngFile)"
+						class="flex items-center gap-2"
+					>
+						<img
+							:src="faviconPngPreview || state.faviconPng"
+							alt="Favicon PNG preview"
+							class="size-16 rounded border border-default"
+						/>
+						<UButton
+							icon="mdi:close"
+							color="error"
+							size="xs"
+							variant="ghost"
+							@click="clearFaviconPng"
+						>
+							Remove
+						</UButton>
+					</div>
+				</div>
 			</UFormField>
 		</section>
 
@@ -482,6 +536,48 @@ const rateLimits = computed<RateLimits>({
 });
 
 const messageState = computed(() => state.message);
+
+// favicon upload -> data url (nuxtpress convention): a chosen file is read into a data url and stored
+// as the setting so no separate asset host is needed; the text field stays for a url/path
+const faviconFile = ref<File | null>(null);
+const faviconPreview = ref<string | null>(null);
+const faviconPngFile = ref<File | null>(null);
+const faviconPngPreview = ref<string | null>(null);
+
+function readAsDataUrl(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(reader.result as string);
+		reader.onerror = () => reject(reader.error);
+		reader.readAsDataURL(file);
+	});
+}
+
+watch(faviconFile, async (file) => {
+	if (!file) return void (faviconPreview.value = null);
+	const url = await readAsDataUrl(file);
+	faviconPreview.value = url;
+	state.favicon = url;
+});
+
+watch(faviconPngFile, async (file) => {
+	if (!file) return void (faviconPngPreview.value = null);
+	const url = await readAsDataUrl(file);
+	faviconPngPreview.value = url;
+	state.faviconPng = url;
+});
+
+function clearFavicon() {
+	faviconFile.value = null;
+	faviconPreview.value = null;
+	state.favicon = '';
+}
+
+function clearFaviconPng() {
+	faviconPngFile.value = null;
+	faviconPngPreview.value = null;
+	state.faviconPng = '';
+}
 
 const bannerTypes = [
 	{ label: 'Info', value: 'info' },

@@ -8,6 +8,7 @@ import {
 	firstZodIssueMessage,
 	hfModelFor,
 	machineCreateSchema,
+	settingsSchema,
 	trainingConfigSchema,
 	trainingJobCreateSchema,
 	userCreateSchema,
@@ -346,5 +347,26 @@ describe('trainingJobCreateSchema refinements', () => {
 				engine: 'unknown' as unknown as 'peft'
 			}).success
 		).toBe(false);
+	});
+});
+
+describe('settingsSchema blank-tolerant branding', () => {
+	it('accepts a blank theme color (use-default) and a valid hex, rejects a bad hex', () => {
+		expect(settingsSchema.safeParse({ themeColor: '' }).success).toBe(true);
+		expect(settingsSchema.safeParse({ themeColor: '#6d28d9' }).success).toBe(true);
+		expect(settingsSchema.safeParse({ themeColor: 'purple' }).success).toBe(false);
+	});
+
+	it('accepts a null banner and a blank-text banner (both mean no banner)', () => {
+		expect(settingsSchema.safeParse({ message: null }).success).toBe(true);
+		expect(
+			settingsSchema.safeParse({ message: { text: '', type: 'info', icon: '' } }).success
+		).toBe(true);
+	});
+
+	it('accepts a real banner', () => {
+		expect(
+			settingsSchema.safeParse({ message: { text: 'Heads up', type: 'warning' } }).success
+		).toBe(true);
 	});
 });

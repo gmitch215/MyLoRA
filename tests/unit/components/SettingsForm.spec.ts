@@ -61,6 +61,25 @@ describe('settings/Form', () => {
 		vi.unstubAllGlobals();
 	});
 
+	it('renders a favicon uploader and previews a stored data-url favicon', async () => {
+		vi.stubGlobal(
+			'$fetch',
+			vi.fn().mockResolvedValue({ ...loaded, favicon: 'data:image/png;base64,iVBORw0KGgo=' })
+		);
+		const w = await mountSuspended(SettingsForm);
+		// wait until the async load populated the form body (the uploader appears once loaded)
+		for (let i = 0; i < 10 && !w.find('input[type="file"]').exists(); i++) {
+			await flush();
+			await w.vm.$nextTick();
+		}
+		// the upload control exists (data-url conversion happens on file select)
+		expect(w.find('input[type="file"]').exists()).toBe(true);
+		// the stored data-url favicon renders in a preview img
+		const srcs = w.findAll('img').map((i) => i.attributes('src') || '');
+		expect(srcs.some((s) => s.startsWith('data:image/png'))).toBe(true);
+		vi.unstubAllGlobals();
+	});
+
 	it('emits cancel from the cancel button', async () => {
 		vi.stubGlobal('$fetch', vi.fn().mockResolvedValue(loaded));
 		const w = await mountSuspended(SettingsForm);

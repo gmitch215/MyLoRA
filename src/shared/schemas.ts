@@ -203,7 +203,8 @@ export const settingsSchema = z.object({
 	themeColor: z
 		.string()
 		.regex(/^#([0-9A-F]{3}){1,2}$/i, 'Theme color must be a valid hex color')
-		.optional(),
+		.optional()
+		.or(z.literal('')),
 	favicon: z.string().optional(),
 	faviconPng: z.string().optional(),
 	website: z.url('Must be a valid URL').optional().or(z.literal('')),
@@ -258,10 +259,10 @@ export const settingsSchema = z.object({
 			cfDeleteEnabled: z.boolean()
 		})
 		.optional(),
-	// optional site-wide banner shown in the navbar
+	// optional site-wide banner shown in the navbar; empty text = no banner (normalized to null on save)
 	message: z
 		.object({
-			text: z.string().min(1).max(300),
+			text: z.string().max(300),
 			icon: z.string().max(100).optional().or(z.literal('')),
 			type: z.enum(['success', 'warning', 'error', 'info']),
 			link: z.url().max(200).optional().or(z.literal(''))

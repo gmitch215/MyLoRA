@@ -41,6 +41,20 @@ test.describe('settings api', () => {
 		});
 	});
 
+	test('saves with a blank theme color and blank banner text (both optional)', async ({
+		request
+	}) => {
+		await loginViaApi(request);
+		// the form submits empty strings for untouched branding fields; these must not block the save
+		const res = await request.post('/api/settings', {
+			data: { themeColor: '', message: { text: '', type: 'info', icon: '' } }
+		});
+		expect(res.ok()).toBe(true);
+		const s = await res.json();
+		// a blank-text banner is normalized to "no banner"
+		expect(s.message ?? null).toBeNull();
+	});
+
 	test('persists the permission matrix', async ({ request }) => {
 		await loginViaApi(request);
 		const res = await request.post('/api/settings', {

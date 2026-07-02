@@ -27,10 +27,11 @@ export const useSettingsStore = defineStore('settings', () => {
 	const loading = ref(false);
 	const error = ref<string | null>(null);
 
-	// idempotent; only hits the api once unless forced
+	// idempotent; only hits the api once unless forced. a forced fetch bypasses the in-flight guard so a
+	// prior hung/failed load can never permanently block a refresh
 	async function fetch(force = false) {
 		if (loaded.value && !force) return settings.value;
-		if (loading.value) return settings.value;
+		if (loading.value && !force) return settings.value;
 		loading.value = true;
 		error.value = null;
 		try {
