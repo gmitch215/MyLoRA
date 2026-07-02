@@ -15,7 +15,14 @@ describe('publish store', () => {
 	it('stateFor lazily creates and reuses state', () => {
 		const store = usePublishStore();
 		const s = store.stateFor('a');
-		expect(s).toEqual({ status: null, job: null, message: null, polling: false, error: null });
+		expect(s).toEqual({
+			status: null,
+			job: null,
+			message: null,
+			polling: false,
+			error: null,
+			startedAt: null
+		});
 		expect(store.stateFor('a')).toBe(s);
 	});
 
@@ -31,6 +38,16 @@ describe('publish store', () => {
 		s.job = null;
 		s.status = 'pushing' as any;
 		expect(store.isActive('a')).toBe(true);
+	});
+
+	it('isActive is false for a terminal status even if a stale job lingers', () => {
+		const store = usePublishStore();
+		const s = store.stateFor('a');
+		s.job = { id: 'j' } as any;
+		s.status = 'published' as any;
+		expect(store.isActive('a')).toBe(false);
+		s.status = 'failed' as any;
+		expect(store.isActive('a')).toBe(false);
 	});
 
 	it('preflight passes accountId query when provided', async () => {

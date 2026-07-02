@@ -4,7 +4,12 @@ type PushState = {
 	message: string | null;
 	polling: boolean;
 	error: string | null;
+	startedAt: number | null;
 };
+
+// safety net: stop polling (and clear the spinner) even if the server never reports terminal, so the ui
+// cannot hang forever. the cron reconciler finalizes the row server-side; a refresh then shows it
+const MAX_POLL_MS = 8 * 60_000;
 
 export const usePublishStore = defineStore('publish', () => {
 	const states = reactive<Record<string, PushState>>({});
@@ -12,13 +17,23 @@ export const usePublishStore = defineStore('publish', () => {
 
 	function stateFor(id: string): PushState {
 		if (!states[id])
-			states[id] = { status: null, job: null, message: null, polling: false, error: null };
+			states[id] = {
+				status: null,
+				job: null,
+				message: null,
+				polling: false,
+				error: null,
+				startedAt: null
+			};
 		return states[id]!;
 	}
 
 	function isActive(id: string): boolean {
 		const s = states[id];
-		return !!s && (s.polling || !!s.job || s.status === 'pushing');
+		if (!s) return false;
+		// a terminal status ends the spinner even if a stale job object lingers in state
+		if (s.status === 'published' || s.status === 'failed') return false;
+		return s.polling || !!s.job || s.status === 'pushing';
 	}
 
 	async function preflight(id: string, accountId?: string | null) {
@@ -37,6 +52,7 @@ export const usePublishStore = defineStore('publish', () => {
 		s.error = null;
 		s.job = null;
 		s.message = null;
+		s.startedAt = Date.now();
 		try {
 			const res = await $fetch<{ ok: boolean; status: AdapterStatus }>(
 				`/api/adapters/${id}/publish`,
@@ -57,6 +73,14 @@ export const usePublishStore = defineStore('publish', () => {
 	async function poll(id: string) {
 		const s = stateFor(id);
 		s.polling = true;
+		if (!s.startedAt) s.startedAt = Date.now();
+		// give up polling after the cap so the spinner can't hang; the server reconciler finalizes the row
+		if (Date.now() - s.startedAt > MAX_POLL_MS) {
+			s.message =
+				s.message ?? 'Still publishing - this is taking longer than usual; refresh shortly.';
+			stop(id);
+			return;
+		}
 		try {
 			const res = await $fetch<{ status: AdapterStatus; statusMessage?: string; job?: PushJob }>(
 				`/api/adapters/${id}/status`
