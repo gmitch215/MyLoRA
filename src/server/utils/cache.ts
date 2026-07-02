@@ -4,12 +4,29 @@ function store() {
 	return useStorage('cache');
 }
 
+// L1: in-isolate memory
+const L1_MAX = 2000;
+const l1 = new Map<string, Wrapped<unknown>>();
+
+function l1Set(id: string, w: Wrapped<unknown>) {
+	l1.delete(id);
+	l1.set(id, w);
+	if (l1.size > L1_MAX) l1.delete(l1.keys().next().value as string);
+}
+
 export async function getCache<T>(id: string): Promise<T | null> {
+	const now = Date.now();
+	const mem = l1.get(id);
+	if (mem) {
+		if (mem.e > now) return (mem.v ?? null) as T | null;
+		l1.delete(id);
+	}
 	try {
 		const raw = await store().getItem<Wrapped<T>>(id);
 		if (!raw || typeof raw !== 'object' || !('e' in raw)) return null;
 		// honor the embedded expiry so ttl is exact regardless of the kv driver's own eviction
-		if (raw.e < Date.now()) return null;
+		if (raw.e < now) return null;
+		l1Set(id, raw as Wrapped<unknown>);
 		return raw.v ?? null;
 	} catch {
 		return null;
@@ -18,8 +35,10 @@ export async function getCache<T>(id: string): Promise<T | null> {
 
 export async function cache(id: string, value: unknown, ttlSeconds: number): Promise<void> {
 	if (value === null || value === undefined) return;
+	const wrapped = { v: value, e: Date.now() + ttlSeconds * 1000 };
+	l1Set(id, wrapped);
 	try {
-		await store().setItem(id, { v: value, e: Date.now() + ttlSeconds * 1000 }, { ttl: ttlSeconds });
+		await store().setItem(id, wrapped, { ttl: ttlSeconds });
 	} catch (error) {
 		console.warn(`cache set failed for ${id}:`, error);
 	}
@@ -38,6 +57,7 @@ export async function tryCache<T>(
 }
 
 export async function clearCache(id: string): Promise<void> {
+	l1.delete(id);
 	try {
 		await store().removeItem(id);
 	} catch (error) {
@@ -46,6 +66,7 @@ export async function clearCache(id: string): Promise<void> {
 }
 
 export async function clearCachePrefix(prefix: string): Promise<void> {
+	for (const k of l1.keys()) if (k.startsWith(prefix)) l1.delete(k);
 	try {
 		const keys = await store().getKeys(prefix);
 		await Promise.all(keys.map((k) => store().removeItem(k)));
@@ -68,6 +89,8 @@ export const userCacheKey = (id: string) => `user_${safeKey(id)}`;
 export const ADAPTER_LIST_PREFIX = 'list:';
 export const adapterListKey = (scope: string) => `${ADAPTER_LIST_PREFIX}${safeKey(scope)}`;
 export const SETTINGS_CACHE_KEY = 'settings_all';
+export const PERMISSIONS_CACHE_PREFIX = 'caps:';
+export const capsCacheKey = (role: string) => `${PERMISSIONS_CACHE_PREFIX}${role}`;
 
 // role/active/profile changed -> the session hook must re-read this user
 export async function invalidateUser(id: string): Promise<void> {
@@ -79,6 +102,8 @@ export async function invalidateAdapterLists(): Promise<void> {
 	await clearCachePrefix(ADAPTER_LIST_PREFIX);
 }
 
+// settings.post changes both the branding blob and the permission matrix
 export async function invalidateSettings(): Promise<void> {
 	await clearCache(SETTINGS_CACHE_KEY);
+	await clearCachePrefix(PERMISSIONS_CACHE_PREFIX);
 }
