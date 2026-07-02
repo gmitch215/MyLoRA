@@ -1,3 +1,4 @@
+import { reconcileStuckPublishes } from '../utils/publish';
 import { activeJobIds, advanceJob, POLL_INTERVAL_MS, purgeExpiredLogs } from '../utils/training';
 
 // advance a list of jobs with bounded concurrency
@@ -26,6 +27,8 @@ export default defineNitroPlugin((nitroApp) => {
 			await ensureDatabase();
 			const ids = await activeJobIds();
 			if (ids.length) await drive(ids);
+			// finalize adapters left in 'pushing' when a long publish outran the worker's background budget
+			await reconcileStuckPublishes();
 			// self-throttled (~every 6h): purge R2 logs past the retention window
 			await purgeExpiredLogs();
 		} catch (e) {
