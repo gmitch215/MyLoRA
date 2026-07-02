@@ -194,20 +194,17 @@ const adaptersStore = useAdaptersStore();
 const publishStore = usePublishStore();
 const toast = useToast();
 
-// the dashboard fetches the user's OWN adapters via a dedicated call (mine=1), kept separate from the
-// public grid store so its rows are never a filtered/paginated slice of the shared feed
 async function refresh() {
-	await adaptersStore.fetchMine();
+	await adaptersStore.fetchMine({ force: true });
 }
-// client-only: this list is user-specific (mine=1 needs the session), and an SSR $fetch does not carry
-// the auth cookie - it would return public-only and drop the user's failed/unlisted rows on refresh
-await useAsyncData(
+
+useAsyncData(
 	'my-adapters',
 	async () => {
 		await adaptersStore.fetchMine();
 		return adaptersStore.mineItems.length;
 	},
-	{ server: false }
+	{ server: false, lazy: true }
 );
 
 // defensive owner filter (the server already scopes mine=1 to the current user)

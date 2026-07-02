@@ -155,7 +155,7 @@ const refreshing = ref(false);
 async function refresh() {
 	refreshing.value = true;
 	try {
-		await adaptersStore.fetchList();
+		await adaptersStore.fetchList({ force: true });
 	} finally {
 		refreshing.value = false;
 	}
