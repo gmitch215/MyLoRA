@@ -23,8 +23,14 @@ export default defineEventHandler(async (event) => {
 
 	// structured json keys (caps re-applied by the typed getters on read)
 	for (const k of JSON_KEYS) {
-		const v = data[k];
-		if (v !== undefined) await setJsonSetting(k, v);
+		let v = data[k];
+		if (v === undefined) continue;
+		// a banner with blank text means "no banner" -> store null so an empty bar never renders
+		if (k === 'message') {
+			const text = (v as { text?: string } | null)?.text?.trim();
+			v = text ? v : null;
+		}
+		await setJsonSetting(k, v);
 	}
 
 	await invalidateSettings();
