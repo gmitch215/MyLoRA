@@ -45,11 +45,15 @@ describe('cache helper', () => {
 		expect(await getCache('u')).toBeNull();
 	});
 
-	it('honors the embedded expiry', async () => {
-		await cache('exp', 'v', 60);
-		// force the stored entry to have already expired
-		mem.set('exp', { v: 'v', e: Date.now() - 1000 });
-		expect(await getCache('exp')).toBeNull();
+	it('honors the embedded expiry (through the L1 memory tier)', async () => {
+		vi.useFakeTimers();
+		try {
+			await cache('exp', 'v', 1);
+			vi.setSystemTime(Date.now() + 2000);
+			expect(await getCache('exp')).toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('tryCache runs the fallback once on a miss, then serves from cache', async () => {
