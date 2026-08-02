@@ -81,6 +81,12 @@ beforeEach(() => {
 	loadingKeys.clear();
 	limits.value = { maxOutputTokens: 512, maxSystemPromptChars: 500 };
 	localStorage.clear();
+	// the target catalog is app-scoped useState so the panels share one fetch; clear it or a
+	// previous case's adapters survive into the next mount
+	const targets = usePlaygroundTargets();
+	targets.models.value = [];
+	targets.adapters.value = [];
+	targets.loaded.value = false;
 	stubFetch();
 });
 

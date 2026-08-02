@@ -21,8 +21,20 @@
 				>
 					Compare
 				</UButton>
+				<UButton
+					size="sm"
+					icon="mdi:sword-cross"
+					:variant="mode === 'versus' ? 'solid' : 'outline'"
+					color="primary"
+					@click="setMode('versus')"
+				>
+					Versus
+				</UButton>
 			</div>
-			<div class="flex items-center gap-3">
+			<div
+				v-if="mode !== 'versus'"
+				class="flex flex-wrap items-center justify-end gap-3"
+			>
 				<div class="flex items-center gap-1.5">
 					<label
 						for="pg-max-tokens"
@@ -84,127 +96,133 @@
 			</div>
 		</div>
 
-		<p
-			v-if="mode === 'compare'"
-			class="text-xs text-muted"
-		>
-			Send one prompt to two targets. Pick a base model to compare against "no adapter"; at least
-			one side must be a published LoRA adapter.
-		</p>
-		<UAlert
-			v-if="mode === 'compare' && !canCompare"
-			color="warning"
-			variant="subtle"
-			icon="mdi:alert"
-			title="Select at least one published LoRA adapter to compare."
-		/>
+		<AiVersusPanel v-if="mode === 'versus'" />
 
-		<div v-if="maxSystemChars > 0">
-			<UButton
-				:icon="showSystem ? 'mdi:chevron-down' : 'mdi:chevron-right'"
-				size="xs"
-				variant="link"
-				color="neutral"
-				class="px-0"
-				@click="showSystem = !showSystem"
+		<template v-else>
+			<p
+				v-if="mode === 'compare'"
+				class="text-xs text-muted"
 			>
-				System Message
-			</UButton>
-			<UTextarea
-				v-if="showSystem"
-				v-model="systemPrompt"
-				:rows="2"
-				:maxlength="maxSystemChars"
-				placeholder="Optional system instructions sent to every target..."
-				class="mt-1 w-full"
+				Send one prompt to two targets. Pick a base model to compare against "no adapter"; at least
+				one side must be a published LoRA adapter.
+			</p>
+			<UAlert
+				v-if="mode === 'compare' && !canCompare"
+				color="warning"
+				variant="subtle"
+				icon="mdi:alert"
+				title="Select at least one published LoRA adapter to compare."
 			/>
-		</div>
 
-		<div :class="mode === 'compare' ? 'grid gap-4 lg:grid-cols-2' : ''">
-			<div
-				v-for="pane in panes"
-				:key="pane.key"
-				class="flex flex-col gap-2 rounded-lg border border-default p-3 bg-elevated/50"
-			>
-				<USelectMenu
-					:model-value="pane.valueRef.value"
-					:items="options"
-					value-key="value"
-					placeholder="Select a base model or LoRA adapter"
-					class="w-full"
-					@update:model-value="pane.valueRef.value = $event"
-				/>
-
-				<AiContextMeter
-					v-if="inference.pathOf(pane.key).length"
-					:used="usedTokens(pane.key)"
-					:total="contextFor(pane.valueRef.value)"
-				/>
-
-				<AiChatThread
-					:nodes="inference.pathOf(pane.key)"
-					:loading="inference.isLoading(pane.key)"
-					editable
-					class="min-h-[36vh] max-h-[56vh] rounded-lg bg-default/60 p-3"
-					@edit="onEdit(pane.key, pane.valueRef, $event)"
-					@branch="onBranch(pane.key, $event)"
+			<div v-if="maxSystemChars > 0">
+				<UButton
+					:icon="showSystem ? 'mdi:chevron-down' : 'mdi:chevron-right'"
+					size="xs"
+					variant="link"
+					color="neutral"
+					class="px-0"
+					@click="showSystem = !showSystem"
 				>
-					<template #empty>
-						{{
-							targetIsAdapter(pane.valueRef.value)
-								? 'Testing with the LoRA attached.'
-								: 'Testing the base model with no adapter.'
-						}}
-					</template>
-				</AiChatThread>
-
-				<UAlert
-					v-if="sessionFor(pane.key).error"
-					color="error"
-					variant="subtle"
-					icon="mdi:alert-circle"
-					:title="sessionFor(pane.key).error || ''"
+					System Message
+				</UButton>
+				<UTextarea
+					v-if="showSystem"
+					v-model="systemPrompt"
+					:rows="2"
+					:maxlength="maxSystemChars"
+					placeholder="Optional system instructions sent to every target..."
+					class="mt-1 w-full"
 				/>
 			</div>
-		</div>
 
-		<UChatPrompt
-			v-model="prompt"
-			:status="globalStatus"
-			:placeholder="mode === 'compare' ? 'Message both targets...' : 'Message the model...'"
-			@submit="onSubmit"
-			@stop="stopAll"
-		>
-			<UChatPromptSubmit
+			<div :class="mode === 'compare' ? 'grid gap-4 lg:grid-cols-2' : ''">
+				<div
+					v-for="pane in panes"
+					:key="pane.key"
+					class="flex min-w-0 flex-col gap-2 rounded-lg border border-default p-3 bg-elevated/50"
+				>
+					<USelectMenu
+						:model-value="pane.valueRef.value"
+						:items="options"
+						value-key="value"
+						placeholder="Select a base model or LoRA adapter"
+						class="w-full"
+						@update:model-value="pane.valueRef.value = $event"
+					/>
+
+					<AiContextMeter
+						v-if="inference.pathOf(pane.key).length"
+						:used="usedTokens(pane.key)"
+						:total="contextFor(pane.valueRef.value)"
+					/>
+
+					<AiChatThread
+						:nodes="inference.pathOf(pane.key)"
+						:loading="inference.isLoading(pane.key)"
+						editable
+						class="min-h-[36vh] max-h-[56vh] rounded-lg bg-default/60 p-3"
+						@edit="onEdit(pane.key, pane.valueRef, $event)"
+						@branch="onBranch(pane.key, $event)"
+					>
+						<template #empty>
+							{{
+								targetIsAdapter(pane.valueRef.value)
+									? 'Testing with the LoRA attached.'
+									: 'Testing the base model with no adapter.'
+							}}
+						</template>
+					</AiChatThread>
+
+					<UAlert
+						v-if="sessionFor(pane.key).error"
+						color="error"
+						variant="subtle"
+						icon="mdi:alert-circle"
+						:title="sessionFor(pane.key).error || ''"
+					/>
+				</div>
+			</div>
+
+			<UChatPrompt
+				v-model="prompt"
 				:status="globalStatus"
+				:placeholder="mode === 'compare' ? 'Message both targets...' : 'Message the model...'"
+				@submit="onSubmit"
 				@stop="stopAll"
-			/>
-		</UChatPrompt>
-
-		<UModal
-			v-model:open="showDiff"
-			title="Compare Responses"
-			:ui="{ content: 'max-w-4xl' }"
-		>
-			<template #body>
-				<AiCompareDiff
-					:pairs="diffPairs"
-					:label-a="labelFor(valueA)"
-					:label-b="labelFor(valueB)"
+			>
+				<UChatPromptSubmit
+					:status="globalStatus"
+					@stop="stopAll"
 				/>
-			</template>
-		</UModal>
+			</UChatPrompt>
+
+			<UModal
+				v-model:open="showDiff"
+				title="Compare Responses"
+				:ui="{ content: 'max-w-4xl' }"
+			>
+				<template #body>
+					<AiCompareDiff
+						:pairs="diffPairs"
+						:label-a="labelFor(valueA)"
+						:label-b="labelFor(valueB)"
+					/>
+				</template>
+			</UModal>
+		</template>
 	</div>
 </template>
 
 <script setup lang="ts">
 import type { ChatSession, PathNode } from '~/stores/inference';
 
-type ModelInfo = { model: string; modelType: string; contextWindow?: number };
+type PlaygroundMode = 'single' | 'compare' | 'versus';
 
 const inference = useInferenceStore();
 const settings = useSettingsStore();
 const { limits } = storeToRefs(settings);
+const targets = usePlaygroundTargets();
+const { contextFor, labelFor, options, targetIsAdapter, targetOf } = targets;
 
 // configurable per-request response cap; the server clamps to limits.maxOutputTokens
 const maxTokenCeiling = computed(() => limits.value.maxOutputTokens);
@@ -218,10 +236,8 @@ const maxSystemChars = computed(() => limits.value.maxSystemPromptChars);
 const systemPrompt = ref('');
 const showSystem = ref(false);
 
-const mode = ref<'single' | 'compare'>('single');
+const mode = ref<PlaygroundMode>('single');
 const prompt = ref('');
-const models = ref<ModelInfo[]>([]);
-const publishedAdapters = ref<Adapter[]>([]);
 const showDiff = ref(false);
 
 // one value per pane; encoded as `adapter:<id>` or `base:<model>`
@@ -274,26 +290,14 @@ const EMPTY: ChatSession = {
 	retryAfter: null
 };
 
-function short(model: string) {
-	return model.split('/').pop() || model;
-}
-
 onMounted(async () => {
 	// restore persisted playground conversations before defaults/selections are applied
 	inference.hydrate();
-	const [m, a] = await Promise.all([
-		$fetch<ModelInfo[]>('/api/infer/models').catch(() => []),
-		$fetch<{ items: Adapter[] }>('/api/adapters/list', {
-			query: { pageSize: 100, sort: 'newest' }
-		}).catch(() => ({ items: [] }))
-	]);
-	models.value = Array.isArray(m) ? m : [];
-	// published + migrated adapters are testable in the playground
-	publishedAdapters.value = (a.items ?? []).filter((x) => isTestable(x.status));
+	await targets.load();
 
 	// defaults: single -> first adapter (else first base); compare -> adapter vs its own base model
-	const firstAdapter = publishedAdapters.value[0];
-	const firstBase = models.value[0]?.model;
+	const firstAdapter = targets.adapters.value[0];
+	const firstBase = targets.models.value[0]?.model;
 	valueSingle.value = firstAdapter
 		? `adapter:${firstAdapter.id}`
 		: firstBase
@@ -309,7 +313,9 @@ onMounted(async () => {
 	const valid = new Set(options.value.map((o) => o.value));
 	const sel = loadSel();
 	if (sel) {
-		if (sel.mode === 'single' || sel.mode === 'compare') mode.value = sel.mode;
+		if (sel.mode === 'single' || sel.mode === 'compare' || sel.mode === 'versus') {
+			mode.value = sel.mode;
+		}
 		if (sel.single) {
 			if (valid.has(sel.single)) valueSingle.value = sel.single;
 			else inference.clear(SINGLE_KEY);
@@ -328,39 +334,6 @@ onMounted(async () => {
 	await nextTick();
 	hydrated.value = true;
 });
-
-const options = computed(() => [
-	...publishedAdapters.value.map((a) => ({
-		// include the base model so it's clear what each lora runs on
-		label: `LoRA: ${a.name} (${short(a.baseModel)})`,
-		value: `adapter:${a.id}`
-	})),
-	...models.value.map((m) => ({ label: `Base: ${short(m.model)}`, value: `base:${m.model}` }))
-]);
-
-function targetIsAdapter(value: string) {
-	return value.startsWith('adapter:');
-}
-
-function targetOf(value: string): { adapterId?: string; baseModel?: string } | null {
-	if (value.startsWith('adapter:')) return { adapterId: value.slice('adapter:'.length) };
-	if (value.startsWith('base:')) return { baseModel: value.slice('base:'.length) };
-	return null;
-}
-
-// the base model behind a target value (adapter -> its base; base -> itself)
-function modelOf(value: string): string {
-	if (value.startsWith('adapter:')) {
-		const id = value.slice('adapter:'.length);
-		return publishedAdapters.value.find((a) => a.id === id)?.baseModel ?? '';
-	}
-	if (value.startsWith('base:')) return value.slice('base:'.length);
-	return '';
-}
-
-function contextFor(value: string): number {
-	return contextWindowFor(modelOf(value));
-}
 
 function usedTokens(key: string): number {
 	return estimateTokens(
@@ -394,7 +367,7 @@ const globalStatus = computed<'submitted' | 'streaming' | 'ready' | 'error'>(() 
 	panes.value.some((p) => inference.isLoading(p.key)) ? 'streaming' : 'ready'
 );
 
-function setMode(m: 'single' | 'compare') {
+function setMode(m: PlaygroundMode) {
 	mode.value = m;
 	saveSel();
 }
@@ -421,11 +394,6 @@ watch(valueB, () => {
 	if (hydrated.value) inference.clear(B_KEY);
 	saveSel();
 });
-
-// readable label for a target value, used in the exported transcript and diff viewer
-function labelFor(value: string): string {
-	return options.value.find((o) => o.value === value)?.label ?? value;
-}
 
 function transcript(): string {
 	return chatsToText(
