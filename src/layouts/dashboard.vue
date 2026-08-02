@@ -10,9 +10,11 @@
 					to="/"
 					class="flex items-center gap-2 font-semibold"
 				>
-					<NuxtImg
-						src="/favicon.png"
-						alt="Logo"
+					<img
+						:src="FAVICON"
+						alt=""
+						width="28"
+						height="28"
 						class="w-7 h-7 shrink-0"
 					/>
 					<span
@@ -50,11 +52,17 @@
 			</template>
 		</UDashboardSidebar>
 
-		<slot />
+		<main
+			id="main-content"
+			class="contents"
+		>
+			<slot />
+		</main>
 	</UDashboardGroup>
 </template>
 
 <script setup lang="ts">
+const FAVICON = '/favicon.png';
 const { settings } = useSettings();
 const auth = useAuthStore();
 

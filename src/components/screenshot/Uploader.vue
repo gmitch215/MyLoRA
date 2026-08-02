@@ -20,9 +20,10 @@
 					color="error"
 					variant="solid"
 					size="xs"
-					class="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100"
+					class="hover-reveal absolute top-1 right-1"
 					:loading="removingIdx === idx"
 					title="Remove Screenshot"
+					aria-label="Remove Screenshot"
 					@click="remove(idx)"
 				/>
 			</div>

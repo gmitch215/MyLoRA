@@ -1,23 +1,33 @@
 <template>
 	<div
 		id="navbar"
-		class="border-b border-default py-3 sm:px-4 flex items-center bg-elevated/40"
+		class="border-b border-default py-3 px-3 sm:px-4 flex items-center bg-elevated/40"
 	>
-		<div class="flex items-center justify-center w-full sm:px-2">
-			<div class="flex items-center justify-center sm:mr-8 space-x-2 md:space-x-4 lg:space-x-6">
-				<div class="flex flex-col text-center sm:text-left sm:flex-row justify-center items-center">
-					<NuxtLink to="/">
-						<NuxtImg
-							src="/favicon.png"
-							alt="Logo"
+		<div class="flex min-w-0 items-center justify-center w-full sm:px-2">
+			<div
+				class="flex min-w-0 items-center justify-center sm:mr-8 space-x-2 md:space-x-4 lg:space-x-6"
+			>
+				<div
+					class="flex min-w-0 flex-col text-center sm:text-left sm:flex-row justify-center items-center"
+				>
+					<NuxtLink
+						to="/"
+						:aria-label="siteName"
+					>
+						<!-- plain img: /favicon.png is a 302 to the configured icon, which _ipx cannot follow -->
+						<img
+							:src="FAVICON"
+							alt=""
+							width="40"
+							height="40"
 							class="min-w-4 w-8 h-auto lg:w-10 inline-block mr-2 hover:scale-105 transition-transform duration-300"
 						/>
 					</NuxtLink>
 					<NuxtLink
 						to="/"
-						class="ml-2 mr-2 sm:mr-4 lg:mr-6 text-xs md:text-md lg:text-lg font-semibold text-highlighted"
+						class="ml-2 mr-2 sm:mr-4 lg:mr-6 hidden max-w-full truncate text-xs sm:inline md:text-md lg:text-lg font-semibold text-highlighted"
 					>
-						{{ settings.name || config.public.name || 'MyLoRA' }}
+						{{ siteName }}
 					</NuxtLink>
 					<span
 						class="hidden md:inline text-xs lg:text-sm whitespace-nowrap mr-2 sm:mr-4 text-muted"
@@ -26,11 +36,12 @@
 					</span>
 				</div>
 
-				<div class="grid grid-cols-2 gap-1 sm:space-y-0 sm:flex sm:space-x-2 mr-2">
+				<div class="flex shrink-0 flex-wrap items-center gap-1 sm:gap-2 mr-2">
 					<UButton
 						icon="mdi:home"
 						to="/"
 						title="Home"
+						aria-label="Home"
 						variant="subtle"
 						color="neutral"
 					/>
@@ -38,6 +49,7 @@
 						icon="mdi:tag-multiple"
 						to="/tags"
 						title="Tags"
+						aria-label="Tags"
 						variant="subtle"
 						color="primary"
 					/>
@@ -47,6 +59,7 @@
 						icon="mdi:flask"
 						to="/playground"
 						title="Playground"
+						aria-label="Playground"
 						variant="subtle"
 						color="warning"
 					/>
@@ -54,17 +67,18 @@
 						icon="mdi:account-badge"
 						to="/about"
 						title="About"
+						aria-label="About"
 						variant="subtle"
 						color="secondary"
 					/>
 				</div>
 			</div>
 
-			<div class="ml-auto">
-				<div class="flex items-center space-x-2 sm:space-x-3">
+			<div class="ml-auto shrink-0">
+				<div class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
 					<!-- social icons -->
 					<div
-						class="hidden md:flex items-center space-x-2 lg:space-x-3 light:opacity-70"
+						class="hidden sm:flex items-center gap-2 lg:gap-3 light:opacity-70"
 						:style="themeColorStyle"
 					>
 						<NuxtLink
@@ -120,6 +134,7 @@
 							icon="mdi:view-dashboard"
 							to="/dashboard"
 							title="Dashboard"
+							aria-label="Dashboard"
 							variant="subtle"
 							color="neutral"
 						/>
@@ -127,12 +142,14 @@
 							icon="mdi:account-circle"
 							to="/profile"
 							title="Profile"
+							aria-label="Profile"
 							variant="subtle"
 							color="info"
 						/>
 						<UButton
 							icon="mdi:logout"
 							title="Log Out"
+							aria-label="Log Out"
 							variant="ghost"
 							color="error"
 							@click="onLogout"
@@ -180,6 +197,9 @@ const { loggedIn } = storeToRefs(auth);
 const config = useRuntimeConfig();
 const route = useRoute();
 const router = useRouter();
+
+const FAVICON = '/favicon.png';
+const siteName = computed(() => settings.value.name || config.public.name || 'MyLoRA');
 
 const loginOpen = ref(false);
 

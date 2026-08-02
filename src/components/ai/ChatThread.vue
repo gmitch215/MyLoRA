@@ -146,10 +146,7 @@
 								/>
 							</div>
 
-							<!-- hover actions -->
-							<div
-								class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
-							>
+							<div class="hover-reveal flex items-center gap-0.5">
 								<UTooltip :text="copiedId === node.id ? 'Copied' : 'Copy'">
 									<UButton
 										:icon="copiedId === node.id ? 'mdi:check' : 'mdi:content-copy'"

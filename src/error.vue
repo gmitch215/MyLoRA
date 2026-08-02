@@ -1,7 +1,7 @@
 <template>
 	<UApp>
 		<NuxtLayout>
-			<div class="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center">
+			<div class="flex flex-col items-center justify-center min-h-[80dvh] px-4 text-center">
 				<UIcon
 					:name="is404 ? 'mdi:compass-off-outline' : 'mdi:alert-circle-outline'"
 					class="size-14 md:size-16 text-primary mb-4"
