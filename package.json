@@ -78,7 +78,7 @@
     "monocart-reporter": "^2.12.4",
     "prettier": "^3.9.6",
     "prettier-plugin-organize-imports": "^4.3.0",
-    "prettier-plugin-sh": "^0.18.1",
+    "prettier-plugin-sh": "^0.19.0",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "sass": "^1.102.0",
     "v8-to-istanbul": "^9.3.0",
