@@ -98,6 +98,9 @@ export default defineEventHandler(async (event) => {
 			await setJsonSetting('permissions', onboardSettings.permissions);
 		if (onboardSettings.access !== undefined)
 			await setJsonSetting('access', onboardSettings.access);
+		// rendering /setup already primed the 60s settings cache with defaults; without this the
+		// new admin's onboarding choices look ignored until the ttl lapses
+		await invalidateSettings();
 	}
 
 	await sealSetup(event);
