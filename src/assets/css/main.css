@@ -1,6 +1,16 @@
 @import 'tailwindcss';
 @import '@nuxt/ui';
 
+/* the `prose` classes on every rendered-markdown block are inert without this; preflight
+   otherwise resets headings to body text and strips list markers */
+@plugin '@tailwindcss/typography';
+
+/* typography wraps inline code in literal backticks, which reads as a typo in a chat bubble */
+.prose code::before,
+.prose code::after {
+	content: none;
+}
+
 :root {
 	--ui-secondary: #1067ea;
 	--ui-success: #6df643;
@@ -15,7 +25,39 @@
 	display: none;
 }
 
-html,
-body {
-	overflow-x: hidden;
+/* hide-until-hover controls; a touch device has no hover, so they stay visible there */
+@media (hover: hover) and (pointer: fine) {
+	.hover-reveal {
+		opacity: 0;
+		transition: opacity 150ms ease;
+	}
+
+	.group:hover .hover-reveal,
+	.group:focus-within .hover-reveal,
+	.hover-reveal:focus-visible,
+	.hover-reveal:focus-within {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	/* keep spinners readable as a static glyph rather than a frozen mid-rotation frame */
+	.animate-spin {
+		animation: none !important;
+	}
+
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
+	}
 }

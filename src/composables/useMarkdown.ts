@@ -44,7 +44,7 @@ export function useMarkdown() {
 
 		const html = marked(content, {
 			renderer: renderer,
-			breaks: true,
+			breaks: false,
 			gfm: true
 		});
 
