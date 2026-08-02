@@ -1,5 +1,5 @@
 <template>
-	<div class="scrollbar-hide overflow-x-auto rounded border border-default">
+	<div class="overflow-x-auto rounded border border-default">
 		<table class="min-w-full text-sm">
 			<thead class="bg-elevated/40 text-muted">
 				<tr>

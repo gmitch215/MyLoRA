@@ -23,7 +23,7 @@
 				:key="row.key"
 				class="flex items-center justify-between gap-2"
 			>
-				<span class="capitalize truncate">{{ row.key }}</span>
+				<span class="min-w-0 capitalize truncate">{{ row.key }}</span>
 				<span class="text-muted tabular-nums">{{ row.value }} ({{ row.pct }}%)</span>
 			</li>
 		</ul>

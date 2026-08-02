@@ -20,7 +20,9 @@
 		>
 			<template #label-cell="{ row }">
 				<UContextMenu :items="rowMenu(row.original)">
-					<span class="cursor-context-menu font-medium">{{ row.original.label }}</span>
+					<span class="block max-w-48 truncate cursor-context-menu font-medium">{{
+						row.original.label
+					}}</span>
 				</UContextMenu>
 			</template>
 			<template #tokenLast4-cell="{ row }">
@@ -68,13 +70,14 @@
 				/>
 			</template>
 			<template #actions-cell="{ row }">
-				<div class="flex items-center gap-1">
+				<div class="flex flex-wrap items-center gap-1">
 					<UButton
 						icon="mdi:refresh"
 						size="xs"
 						variant="ghost"
 						color="neutral"
 						title="Sync"
+						aria-label="Sync Account"
 						:loading="syncingId === row.original.id"
 						@click="onSync(row.original.id)"
 					/>
@@ -84,6 +87,7 @@
 						variant="ghost"
 						color="neutral"
 						title="Verify Publish Permission"
+						aria-label="Verify Publish Permission"
 						:loading="verifyingId === row.original.id"
 						@click="onVerify(row.original.id)"
 					/>
@@ -93,6 +97,7 @@
 						variant="ghost"
 						color="neutral"
 						title="Edit"
+						aria-label="Edit Account"
 						@click="openEdit(row.original)"
 					/>
 					<UButton
@@ -101,6 +106,7 @@
 						variant="ghost"
 						color="error"
 						title="Delete"
+						aria-label="Delete Account"
 						:loading="deletingId === row.original.id"
 						@click="confirmRemove(row.original)"
 					/>

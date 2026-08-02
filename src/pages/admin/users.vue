@@ -21,7 +21,7 @@
 		</template>
 
 		<template #body>
-			<div class="scrollbar-hide overflow-x-auto border border-default rounded-lg">
+			<div class="overflow-x-auto border border-default rounded-lg">
 				<table class="min-w-full text-sm">
 					<thead class="bg-elevated/40 text-left">
 						<tr>
@@ -99,6 +99,7 @@
 			<UModal
 				v-model:open="formOpen"
 				:title="editing ? 'Edit User' : 'New User'"
+				:ui="{ content: 'sm:max-w-xl' }"
 			>
 				<template #body>
 					<form
