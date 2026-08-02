@@ -5,8 +5,10 @@ const isCI = !!process.env.CI;
 const COVERAGE = process.env.COVERAGE === '1';
 
 const SETUP = process.env.PLAYWRIGHT_SETUP === '1';
+// MYLORA_SETUP_PORT keeps the isolated lane runnable when something else already holds 8788
+const SETUP_PORT = process.env.MYLORA_SETUP_PORT || '8788';
 const BASE_URL = SETUP
-	? process.env.PLAYWRIGHT_SETUP_BASE_URL || 'http://127.0.0.1:8788'
+	? process.env.PLAYWRIGHT_SETUP_BASE_URL || `http://127.0.0.1:${SETUP_PORT}`
 	: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8787';
 
 const baseReporters: any[] = [['list']];
@@ -43,20 +45,20 @@ const reporters: any[] =
 			? baseReporters
 			: [...baseReporters, ['html', { open: 'never', outputFolder: 'playwright-report' }]];
 
+// a project-level testIgnore REPLACES this one rather than merging, so the chromium project has
+// to restate it or the vitest specs get collected as playwright tests
+const IGNORE = [
+	'**/utils/**',
+	'**/fixtures/**',
+	'**/fixtures.ts',
+	'**/setup.spec.ts',
+	'**/unit/**'
+];
+
 export default defineConfig({
 	testDir: './tests',
 	// main run ignores the isolated setup flow; setup run targets only it (fresh unseeded server)
-	...(SETUP
-		? { testMatch: ['**/setup.spec.ts'] }
-		: {
-				testIgnore: [
-					'**/utils/**',
-					'**/fixtures/**',
-					'**/fixtures.ts',
-					'**/setup.spec.ts',
-					'**/unit/**'
-				]
-			}),
+	...(SETUP ? { testMatch: ['**/setup.spec.ts'] } : { testIgnore: IGNORE }),
 	fullyParallel: false,
 	forbidOnly: isCI,
 	retries: isCI ? 2 : 0,
@@ -102,10 +104,20 @@ export default defineConfig({
 		actionTimeout: 20_000,
 		navigationTimeout: 90_000
 	},
-	projects: [
-		{
-			name: SETUP ? 'setup' : 'chromium',
-			use: { ...devices['Desktop Chrome'] }
-		}
-	]
+	projects: SETUP
+		? [{ name: 'setup', use: { ...devices['Desktop Chrome'] } }]
+		: [
+				{
+					name: 'chromium',
+					use: { ...devices['Desktop Chrome'] },
+					testIgnore: [...IGNORE, '**/mobile.spec.ts']
+				},
+				{
+					// Pixel 7 is chromium-based (isMobile + hasTouch, 412x915); an iPhone device would
+					// default to webkit and pull a second browser binary for one spec file
+					name: 'mobile',
+					use: { ...devices['Pixel 7'] },
+					testMatch: ['**/mobile.spec.ts']
+				}
+			]
 });
