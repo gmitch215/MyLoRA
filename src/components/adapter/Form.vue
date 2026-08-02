@@ -244,6 +244,8 @@
 							size="xs"
 							variant="ghost"
 							color="error"
+							title="Remove Example"
+							:aria-label="`Remove Example ${i + 1}`"
 							@click="state.examples.splice(i, 1)"
 						/>
 					</div>

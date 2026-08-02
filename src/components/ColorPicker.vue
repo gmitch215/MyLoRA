@@ -19,6 +19,8 @@
 				:class="modelValue === c ? 'ring-inverted' : 'ring-transparent'"
 				:style="{ backgroundColor: `var(--ui-color-${c}-500)` }"
 				:title="c"
+				:aria-label="`Use the ${c} Theme Color`"
+				:aria-pressed="modelValue === c"
 				@click="emit('update:modelValue', c)"
 			/>
 
@@ -49,6 +51,7 @@
 				variant="ghost"
 				color="neutral"
 				title="Clear"
+				aria-label="Clear Color"
 				@click="emit('update:modelValue', '')"
 			/>
 		</div>
