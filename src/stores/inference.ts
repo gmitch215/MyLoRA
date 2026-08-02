@@ -51,8 +51,56 @@ function uid(): string {
 	return `n${idSeq}`;
 }
 
+export type VersusMessage = { id: string; side: VersusSide; content: string };
+
+export type VersusSideConfig = {
+	target: { adapterId?: string; baseModel?: string };
+	persona: string;
+	label: string;
+};
+
+export type VersusRunConfig = {
+	topic: string;
+	first: VersusSide;
+	perAgent: number;
+	maxTokens?: number;
+	maxSystemChars: number;
+	a: VersusSideConfig;
+	b: VersusSideConfig;
+};
+
+// why a run ended: completed, stopped by the user, out of budget, or a failure
+export type VersusStopReason = 'done' | 'user' | 'limit' | 'error';
+
+export type VersusState = {
+	topic: string;
+	labels: { a: string; b: string };
+	messages: VersusMessage[];
+	running: boolean;
+	turn: number;
+	total: number;
+	error: string | null;
+	retryAfter: number | null;
+	stopped: VersusStopReason | null;
+};
+
+function newVersus(): VersusState {
+	return {
+		topic: '',
+		labels: { a: '', b: '' },
+		messages: [],
+		running: false,
+		turn: 0,
+		total: 0,
+		error: null,
+		retryAfter: null,
+		stopped: null
+	};
+}
+
 const PG_PREFIX = 'pg:';
 const STORE_KEY = 'mylora:playground:v2';
+const VERSUS_STORE_KEY = 'mylora:versus:v1';
 const COMPACT_AT = 14; // auto-compact the active path once it exceeds this many turns
 const COMPACT_KEEP = 6;
 
@@ -247,13 +295,12 @@ export const useInferenceStore = defineStore('inference', () => {
 		controllers[key]?.abort();
 	}
 
-	// read an sse stream into a specific node's content; throws on non-ok (incl. 429)
-	async function consumeNode(
-		s: ChatSession,
-		nodeId: string,
+	// post to an sse endpoint and hand every text delta to onToken; throws on non-ok (incl. 429)
+	async function streamInto(
 		url: string,
 		body: unknown,
-		controller: AbortController
+		controller: AbortController,
+		onToken: (token: string) => void
 	) {
 		const res = await fetch(url, {
 			method: 'POST',
@@ -279,20 +326,38 @@ export const useInferenceStore = defineStore('inference', () => {
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = '';
+		// returns false once [DONE] is seen
+		const emit = (frame: string): boolean => {
+			for (const token of parseFrame(frame)) {
+				if (token === DONE) return false;
+				if (token) onToken(token);
+			}
+			return true;
+		};
 		while (true) {
 			const { value, done } = await reader.read();
 			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
+			// normalize CRLF: the frame delimiter is a blank line, which is \r\n\r\n over a proxy
+			// that rewrites line endings, and splitting on '\n\n' alone would never match it
+			buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 			const frames = buffer.split('\n\n');
 			buffer = frames.pop() ?? '';
-			for (const frame of frames) {
-				const token = parseFrame(frame);
-				if (token === DONE) return;
-				if (token && s.nodes[nodeId]) s.nodes[nodeId]!.content += token;
-			}
+			for (const frame of frames) if (!emit(frame)) return;
 		}
-		const tail = parseFrame(buffer);
-		if (tail && tail !== DONE && s.nodes[nodeId]) s.nodes[nodeId]!.content += tail;
+		emit(buffer);
+	}
+
+	// read an sse stream into a specific node's content
+	async function consumeNode(
+		s: ChatSession,
+		nodeId: string,
+		url: string,
+		body: unknown,
+		controller: AbortController
+	) {
+		await streamInto(url, body, controller, (token) => {
+			if (s.nodes[nodeId]) s.nodes[nodeId]!.content += token;
+		});
 	}
 
 	// shared run: attach a new user node under parentId, stream the assistant reply, account/persist.
@@ -401,6 +466,141 @@ export const useInferenceStore = defineStore('inference', () => {
 		if (key.startsWith(PG_PREFIX)) persist();
 	}
 
+	// #region versus
+
+	// two agents talking to each other; a flat transcript rather than the branching ChatSession tree
+	// (versions / edit-and-resend / compaction have no meaning in a scripted run)
+	const versus = ref<VersusState>(newVersus());
+	let versusController: AbortController | null = null;
+
+	function persistVersus() {
+		if (!import.meta.client) return;
+		const v = versus.value;
+		try {
+			if (v.messages.length) {
+				localStorage.setItem(
+					VERSUS_STORE_KEY,
+					JSON.stringify({ topic: v.topic, labels: v.labels, messages: v.messages })
+				);
+			} else localStorage.removeItem(VERSUS_STORE_KEY);
+		} catch {
+			// storage may be unavailable (private mode); persistence is best-effort
+		}
+	}
+
+	function hydrateVersus() {
+		if (!import.meta.client) return;
+		try {
+			const raw = localStorage.getItem(VERSUS_STORE_KEY);
+			if (!raw) return;
+			const saved = JSON.parse(raw) as Partial<VersusState>;
+			if (!Array.isArray(saved?.messages)) return;
+			versus.value = {
+				...newVersus(),
+				topic: saved.topic ?? '',
+				labels: saved.labels ?? { a: '', b: '' },
+				messages: saved.messages,
+				stopped: saved.messages.length ? 'done' : null
+			};
+		} catch {
+			// ignore malformed persisted state
+		}
+	}
+
+	function clearVersus() {
+		versusController?.abort();
+		versus.value = newVersus();
+		persistVersus();
+	}
+
+	function stopVersus() {
+		versusController?.abort();
+	}
+
+	/**
+	 * Run a versus match: `perAgent` messages from each side, alternating from `cfg.first`.
+	 *
+	 * Every message is one ordinary `/api/infer/playground` request, so the existing per-prompt
+	 * budget applies turn by turn. A 429 mid-run stops the loop and keeps everything already
+	 * streamed rather than discarding the transcript.
+	 */
+	async function runVersus(cfg: VersusRunConfig) {
+		if (versus.value.running) return;
+		const total = Math.max(1, Math.trunc(cfg.perAgent)) * 2;
+		versus.value = {
+			...newVersus(),
+			topic: cfg.topic,
+			labels: { a: cfg.a.label, b: cfg.b.label },
+			running: true,
+			total
+		};
+
+		const controller = new AbortController();
+		versusController = controller;
+
+		try {
+			for (let i = 0; i < total; i++) {
+				if (controller.signal.aborted) {
+					versus.value.stopped = 'user';
+					break;
+				}
+				const side = versusSideAt(cfg.first, i);
+				const sideCfg = side === 'a' ? cfg.a : cfg.b;
+				const index = versus.value.messages.length;
+				const history = versusHistory(cfg.topic, versus.value.messages.slice(), side);
+				const system = versusSystem(sideCfg.persona, cfg.topic, cfg.maxSystemChars);
+
+				versus.value.messages.push({ id: uid(), side, content: '' });
+				versus.value.turn = i + 1;
+
+				try {
+					await streamInto(
+						'/api/infer/playground',
+						{
+							...sideCfg.target,
+							messages: history,
+							maxTokens: cfg.maxTokens,
+							system: system || undefined
+						},
+						controller,
+						// mutate through the reactive array by index or tokens only paint on an
+						// unrelated re-render
+						(token) => {
+							const message = versus.value.messages[index];
+							if (message) message.content += token;
+						}
+					);
+				} catch (e: any) {
+					if (isAbort(e)) {
+						versus.value.stopped = 'user';
+					} else {
+						const d = describeInferenceError(e);
+						versus.value.error = d.message;
+						versus.value.retryAfter = d.retryAfter;
+						versus.value.stopped = d.rateLimited ? 'limit' : 'error';
+					}
+					break;
+				}
+
+				// an empty reply would make every later turn answer nothing; end the run instead
+				if (!versus.value.messages[index]?.content.trim()) {
+					versus.value.error = 'The model returned an empty response';
+					versus.value.stopped = 'error';
+					break;
+				}
+			}
+			if (!versus.value.stopped) versus.value.stopped = 'done';
+		} finally {
+			const last = versus.value.messages[versus.value.messages.length - 1];
+			if (last && !last.content.trim()) versus.value.messages.pop();
+			versus.value.running = false;
+			versusController = null;
+			persistVersus();
+		}
+	}
+
+	// #endregion
+
 	// hydrate is called from the playground on mount (not in setup) so it runs AFTER pinia restores
 	// the ssr payload, which would otherwise overwrite the loaded sessions with empty state
 	return {
@@ -414,41 +614,71 @@ export const useInferenceStore = defineStore('inference', () => {
 		editPlayground,
 		clear,
 		stop,
-		hydrate
+		hydrate,
+		versus,
+		runVersus,
+		stopVersus,
+		clearVersus,
+		hydrateVersus
 	};
 });
 
 const DONE = Symbol('done');
 
-// parse a single sse frame; returns the text delta, DONE sentinel, or '' to skip
-function parseFrame(frame: string): string | typeof DONE {
-	const line = frame
-		.split('\n')
-		.map((l) => l.trim())
-		.find((l) => l.startsWith('data:'));
-	if (!line) return '';
-	const payload = line.slice('data:'.length).trim();
-	if (!payload) return '';
-	if (payload === '[DONE]') return DONE;
-	try {
-		const json = JSON.parse(payload);
-		return json.response ?? json.token ?? json.delta ?? json.text ?? '';
-	} catch {
-		// non-json data line; treat as raw text
-		return payload;
+/**
+ * Parse every `data:` line in an sse frame into its text delta.
+ *
+ * Returns a list, not one value: a chunk can carry several events glued together without the
+ * blank line between them, and reading only the first `data:` line silently dropped the rest.
+ */
+function parseFrame(frame: string): (string | typeof DONE)[] {
+	const out: (string | typeof DONE)[] = [];
+	for (const raw of frame.split('\n')) {
+		const line = raw.trim();
+		if (!line.startsWith('data:')) continue;
+		const payload = line.slice('data:'.length).trim();
+		if (!payload) continue;
+		if (payload === '[DONE]') {
+			out.push(DONE);
+			return out;
+		}
+		try {
+			const json = JSON.parse(payload);
+			out.push(json.response ?? json.token ?? json.delta ?? json.text ?? '');
+		} catch {
+			// non-json data line; treat as raw text
+			out.push(payload);
+		}
 	}
+	return out;
 }
 
-// extract a 429 rate-limit signal from a thrown error, else set a generic message
-function applyError(s: ChatSession, e: any) {
+// extract a 429 rate-limit signal from a thrown error, else a generic message
+export function describeInferenceError(e: any): {
+	rateLimited: boolean;
+	retryAfter: number | null;
+	message: string;
+} {
 	const code = e?.statusCode ?? e?.status ?? e?.response?.status;
 	if (code === 429) {
-		s.rateLimited = true;
 		const ra = e?.retryAfter ?? e?.data?.retryAfter ?? e?.data?.data?.retryAfter;
 		const n = typeof ra === 'string' ? parseInt(ra, 10) : ra;
-		s.retryAfter = Number.isFinite(n) ? n : null;
-		s.error = e?.data?.message ?? 'Rate limit reached';
-	} else {
-		s.error = e?.data?.message ?? e?.message ?? 'Inference failed';
+		return {
+			rateLimited: true,
+			retryAfter: Number.isFinite(n) ? n : null,
+			message: e?.data?.message ?? 'Rate limit reached'
+		};
 	}
+	return {
+		rateLimited: false,
+		retryAfter: null,
+		message: e?.data?.message ?? e?.message ?? 'Inference failed'
+	};
+}
+
+function applyError(s: ChatSession, e: any) {
+	const d = describeInferenceError(e);
+	s.rateLimited = d.rateLimited;
+	s.retryAfter = d.retryAfter;
+	s.error = d.message;
 }

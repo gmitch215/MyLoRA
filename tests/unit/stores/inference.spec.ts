@@ -22,6 +22,18 @@ function sseResponse(
 	} as any;
 }
 
+// stream the given raw chunks verbatim so framing/line-ending handling is observable
+function chunkedResponse(chunks: string[]) {
+	const stream = new ReadableStream<Uint8Array>({
+		start(controller) {
+			const enc = new TextEncoder();
+			for (const c of chunks) controller.enqueue(enc.encode(c));
+			controller.close();
+		}
+	});
+	return { ok: true, status: 200, body: stream, headers: { get: () => null } } as any;
+}
+
 // an error response (non-ok) with an optional json body + retry-after header
 function errorResponse(status: number, body: any, retryAfter?: string) {
 	return {
@@ -330,4 +342,347 @@ describe('inference store', () => {
 		// no system summary node was injected
 		expect(path[0]!.role).toBe('user');
 	});
+
+	// #region versus
+
+	// each call resolves a distinct body so alternation is visible in the transcript
+	function versusFetch(reply: (body: any, call: number) => string[]) {
+		let call = 0;
+		return vi.fn().mockImplementation(async (_url: string, init: any) => {
+			const body = JSON.parse(init.body);
+			return sseResponse([...reply(body, call++), 'data: [DONE]\n\n']);
+		});
+	}
+
+	const CFG = {
+		topic: 'tabs or spaces',
+		first: 'a' as const,
+		perAgent: 2,
+		maxTokens: 128,
+		maxSystemChars: 2000,
+		a: { target: { adapterId: 'lora-1' }, persona: 'pro', label: 'LoRA: one' },
+		b: { target: { baseModel: '@cf/base' }, persona: 'con', label: 'Base: two' }
+	};
+
+	it('runVersus produces perAgent messages per side, alternating from the first speaker', async () => {
+		vi.stubGlobal(
+			'fetch',
+			versusFetch((_b, i) => [`data: {"response":"reply ${i}"}\n\n`])
+		);
+		const store = useInferenceStore();
+		await store.runVersus(CFG);
+
+		expect(store.versus.messages).toHaveLength(4);
+		expect(store.versus.messages.map((m) => m.side)).toEqual(['a', 'b', 'a', 'b']);
+		expect(store.versus.messages.map((m) => m.content)).toEqual([
+			'reply 0',
+			'reply 1',
+			'reply 2',
+			'reply 3'
+		]);
+		expect(store.versus.total).toBe(4);
+		expect(store.versus.running).toBe(false);
+		expect(store.versus.stopped).toBe('done');
+		expect(store.versus.error).toBeNull();
+	});
+
+	it('runVersus starts with the other side when first is b', async () => {
+		vi.stubGlobal(
+			'fetch',
+			versusFetch(() => ['data: {"response":"x"}\n\n'])
+		);
+		const store = useInferenceStore();
+		await store.runVersus({ ...CFG, first: 'b', perAgent: 1 });
+		expect(store.versus.messages.map((m) => m.side)).toEqual(['b', 'a']);
+	});
+
+	it('runVersus sends each side its own target, persona and role-swapped history', async () => {
+		const bodies: any[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockImplementation(async (_url: string, init: any) => {
+				bodies.push(JSON.parse(init.body));
+				return sseResponse([`data: {"response":"m${bodies.length - 1}"}\n\n`, 'data: [DONE]\n\n']);
+			})
+		);
+		const store = useInferenceStore();
+		await store.runVersus(CFG);
+
+		expect(bodies).toHaveLength(4);
+		// side a runs the lora, side b the bare base model
+		expect(bodies[0].adapterId).toBe('lora-1');
+		expect(bodies[1].baseModel).toBe('@cf/base');
+		expect(bodies[0].maxTokens).toBe(128);
+		expect(bodies[0].system).toContain('pro');
+		expect(bodies[0].system).toContain('Topic: tabs or spaces');
+		expect(bodies[1].system).toContain('con');
+
+		// turn 1: nothing to answer yet, so the topic is the user turn
+		expect(bodies[0].messages).toEqual([{ role: 'user', content: 'tabs or spaces' }]);
+		// turn 2: side b sees side a's reply as a user turn
+		expect(bodies[1].messages).toEqual([{ role: 'user', content: 'm0' }]);
+		// turn 3: side a sees its own reply as assistant, re-opened with the topic so the
+		// conversation still starts on `user` (workers AI rejects a leading assistant turn)
+		expect(bodies[2].messages).toEqual([
+			{ role: 'user', content: 'tabs or spaces' },
+			{ role: 'assistant', content: 'm0' },
+			{ role: 'user', content: 'm1' }
+		]);
+		// every request must satisfy the alternating contract
+		for (const body of bodies) {
+			expect(body.messages[0].role).toBe('user');
+			body.messages.forEach((m: any, i: number) => {
+				expect(m.role).toBe(i % 2 === 0 ? 'user' : 'assistant');
+			});
+		}
+	});
+
+	it('runVersus omits the system field entirely when system prompts are disabled', async () => {
+		const bodies: any[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockImplementation(async (_url: string, init: any) => {
+				bodies.push(JSON.parse(init.body));
+				return sseResponse(['data: {"response":"x"}\n\n', 'data: [DONE]\n\n']);
+			})
+		);
+		const store = useInferenceStore();
+		await store.runVersus({ ...CFG, perAgent: 1, maxSystemChars: 0 });
+		expect(bodies[0]).not.toHaveProperty('system');
+	});
+
+	it('runVersus keeps the partial transcript and flags the limit on a mid-run 429', async () => {
+		let call = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockImplementation(async () => {
+				call++;
+				if (call === 3)
+					return errorResponse(429, { message: 'Hourly prompt limit reached' }, '900');
+				return sseResponse([`data: {"response":"t${call}"}\n\n`, 'data: [DONE]\n\n']);
+			})
+		);
+		const store = useInferenceStore();
+		await store.runVersus(CFG);
+
+		// two completed messages survive; the empty third placeholder is dropped
+		expect(store.versus.messages).toHaveLength(2);
+		expect(store.versus.messages.map((m) => m.content)).toEqual(['t1', 't2']);
+		expect(store.versus.stopped).toBe('limit');
+		expect(store.versus.retryAfter).toBe(900);
+		expect(store.versus.error).toBe('Hourly prompt limit reached');
+		expect(store.versus.running).toBe(false);
+	});
+
+	it('runVersus stops on a non-429 failure without discarding earlier messages', async () => {
+		let call = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockImplementation(async () => {
+				call++;
+				if (call === 2) return errorResponse(502, { message: 'upstream boom' });
+				return sseResponse([`data: {"response":"t${call}"}\n\n`, 'data: [DONE]\n\n']);
+			})
+		);
+		const store = useInferenceStore();
+		await store.runVersus(CFG);
+		expect(store.versus.messages.map((m) => m.content)).toEqual(['t1']);
+		expect(store.versus.stopped).toBe('error');
+		expect(store.versus.error).toBe('upstream boom');
+	});
+
+	it('runVersus ends the run when a model returns nothing rather than looping on empty turns', async () => {
+		let call = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockImplementation(async () => {
+				call++;
+				return sseResponse(
+					call === 1 ? ['data: {"response":"only"}\n\n', 'data: [DONE]\n\n'] : ['data: [DONE]\n\n']
+				);
+			})
+		);
+		const store = useInferenceStore();
+		await store.runVersus(CFG);
+		expect(store.versus.messages.map((m) => m.content)).toEqual(['only']);
+		expect(store.versus.stopped).toBe('error');
+		expect(store.versus.error).toBe('The model returned an empty response');
+	});
+
+	it('stopVersus aborts the run and keeps what already streamed', async () => {
+		const store = useInferenceStore();
+		let call = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockImplementation(async (_url: string, init: any) => {
+				call++;
+				if (call === 2) {
+					store.stopVersus();
+					const err: any = new Error('aborted');
+					err.name = 'AbortError';
+					throw err;
+				}
+				init;
+				return sseResponse(['data: {"response":"first"}\n\n', 'data: [DONE]\n\n']);
+			})
+		);
+		await store.runVersus(CFG);
+		expect(store.versus.messages.map((m) => m.content)).toEqual(['first']);
+		expect(store.versus.stopped).toBe('user');
+		expect(store.versus.running).toBe(false);
+	});
+
+	it('runVersus refuses to start a second run while one is in flight', async () => {
+		const fetchMock = versusFetch(() => ['data: {"response":"x"}\n\n']);
+		vi.stubGlobal('fetch', fetchMock);
+		const store = useInferenceStore();
+		const first = store.runVersus({ ...CFG, perAgent: 1 });
+		await store.runVersus({ ...CFG, perAgent: 1 });
+		await first;
+		// only the first run's two calls happened
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('records the labels so the thread can title each side', async () => {
+		vi.stubGlobal(
+			'fetch',
+			versusFetch(() => ['data: {"response":"x"}\n\n'])
+		);
+		const store = useInferenceStore();
+		await store.runVersus({ ...CFG, perAgent: 1 });
+		expect(store.versus.labels).toEqual({ a: 'LoRA: one', b: 'Base: two' });
+		expect(store.versus.topic).toBe('tabs or spaces');
+	});
+
+	it('persists a finished match and rehydrates it', async () => {
+		vi.stubGlobal(
+			'fetch',
+			versusFetch(() => ['data: {"response":"kept"}\n\n'])
+		);
+		const store = useInferenceStore();
+		await store.runVersus({ ...CFG, perAgent: 1 });
+		expect(localStorage.getItem('mylora:versus:v1')).toBeTruthy();
+
+		setActivePinia(createPinia());
+		const fresh = useInferenceStore();
+		expect(fresh.versus.messages).toHaveLength(0);
+		fresh.hydrateVersus();
+		expect(fresh.versus.messages.map((m) => m.content)).toEqual(['kept', 'kept']);
+		expect(fresh.versus.topic).toBe('tabs or spaces');
+		expect(fresh.versus.stopped).toBe('done');
+		expect(fresh.versus.running).toBe(false);
+	});
+
+	it('clearVersus empties the transcript and the persisted copy', async () => {
+		vi.stubGlobal(
+			'fetch',
+			versusFetch(() => ['data: {"response":"x"}\n\n'])
+		);
+		const store = useInferenceStore();
+		await store.runVersus({ ...CFG, perAgent: 1 });
+		store.clearVersus();
+		expect(store.versus.messages).toHaveLength(0);
+		expect(store.versus.stopped).toBeNull();
+		expect(localStorage.getItem('mylora:versus:v1')).toBeNull();
+	});
+
+	it('hydrateVersus ignores malformed persisted state', () => {
+		localStorage.setItem('mylora:versus:v1', '{ not json');
+		const store = useInferenceStore();
+		store.hydrateVersus();
+		expect(store.versus.messages).toEqual([]);
+
+		localStorage.setItem('mylora:versus:v1', JSON.stringify({ messages: 'nope' }));
+		store.hydrateVersus();
+		expect(store.versus.messages).toEqual([]);
+	});
+
+	// #endregion
+
+	// #region sse framing
+
+	describe('sse framing', () => {
+		const frame = (t: string) => `data: ${JSON.stringify({ response: t })}\n\n`;
+
+		async function collect(chunks: string[]) {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue(chunkedResponse(chunks)));
+			const store = useInferenceStore();
+			await store.sendWidget('ad-sse', 'go');
+			return store.pathOf('ad-sse').at(-1)!.content;
+		}
+
+		it('joins tokens delivered one frame per chunk', async () => {
+			expect(await collect([frame('Hello'), frame(' world'), 'data: [DONE]\n\n'])).toBe(
+				'Hello world'
+			);
+		});
+
+		it('joins tokens batched into a single chunk', async () => {
+			expect(await collect([frame('Hello') + frame(' world') + 'data: [DONE]\n\n'])).toBe(
+				'Hello world'
+			);
+		});
+
+		it('reassembles a frame split mid-json across chunks', async () => {
+			expect(
+				await collect(['data: {"resp', 'onse":"Hello"}\n\n', frame(' world'), 'data: [DONE]\n\n'])
+			).toBe('Hello world');
+		});
+
+		it('keeps every data line when several share one frame', async () => {
+			// regression: only the first data: line was read, silently dropping the rest
+			expect(
+				await collect([
+					'data: {"response":"Hello"}\ndata: {"response":" world"}\n\n',
+					'data: [DONE]\n\n'
+				])
+			).toBe('Hello world');
+		});
+
+		it('handles crlf line endings', async () => {
+			// regression: splitting on '\n\n' never matched '\r\n\r\n', so the stream never framed
+			expect(
+				await collect([
+					'data: {"response":"Hello"}\r\n\r\n',
+					'data: {"response":" world"}\r\n\r\n',
+					'data: [DONE]\r\n\r\n'
+				])
+			).toBe('Hello world');
+		});
+
+		it('flushes a trailing frame that never got a blank line', async () => {
+			expect(await collect([frame('Hello'), 'data: {"response":" world"}'])).toBe('Hello world');
+		});
+
+		it('stops at [DONE] and ignores anything after it', async () => {
+			expect(await collect([frame('Hello'), 'data: [DONE]\n\n', frame(' extra')])).toBe('Hello');
+		});
+
+		it('preserves a token that is itself a newline', async () => {
+			expect(await collect([frame('a'), frame('\n'), frame('b'), 'data: [DONE]\n\n'])).toBe('a\nb');
+		});
+
+		it('accepts the alternate delta field names', async () => {
+			expect(
+				await collect([
+					'data: {"token":"a"}\n\n',
+					'data: {"delta":"b"}\n\n',
+					'data: {"text":"c"}\n\n',
+					'data: [DONE]\n\n'
+				])
+			).toBe('abc');
+		});
+
+		it('treats a non-json data line as raw text', async () => {
+			expect(await collect(['data: plain text\n\n', 'data: [DONE]\n\n'])).toBe('plain text');
+		});
+
+		it('ignores comment and event lines', async () => {
+			expect(
+				await collect([': keep-alive\n\n', 'event: message\n' + frame('ok'), 'data: [DONE]\n\n'])
+			).toBe('ok');
+		});
+	});
+
+	// #endregion
 });
