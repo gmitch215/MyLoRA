@@ -100,6 +100,9 @@ export type LimitsSettings = {
 	inferenceCacheTtl: number;
 	maxOutputTokens: number;
 	maxSystemPromptChars: number;
+	// bounds of the playground versus messages-per-agent control
+	versusMinMessages: number;
+	versusMaxMessages: number;
 	logRetentionDays: number;
 };
 

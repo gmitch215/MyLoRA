@@ -3,9 +3,12 @@ import {
 	ADMIN_CAPABILITY,
 	capabilityFor,
 	clampPublicLimit,
+	DEFAULT_LIMITS,
 	DEFAULT_PERMISSIONS,
 	PUBLIC_LIMIT_RANGES
 } from '../../../src/shared/defaults';
+import { VERSUS_HARD_MAX, VERSUS_HARD_MIN } from '../../../src/shared/schemas';
+import { DEFAULT_VERSUS_MESSAGES } from '../../../src/shared/versus';
 
 describe('capabilityFor', () => {
 	it('always returns the full admin capability for administrator (ignores the matrix)', () => {
@@ -40,5 +43,20 @@ describe('clampPublicLimit', () => {
 		const { min, max } = PUBLIC_LIMIT_RANGES.promptsPerHour;
 		expect(clampPublicLimit('promptsPerHour', min)).toBe(min);
 		expect(clampPublicLimit('promptsPerHour', max)).toBe(max);
+	});
+});
+
+describe('DEFAULT_LIMITS versus range', () => {
+	it('defaults the configurable range to 1-10 inside the hard bounds', () => {
+		expect(DEFAULT_LIMITS.versusMinMessages).toBe(1);
+		expect(DEFAULT_LIMITS.versusMaxMessages).toBe(10);
+		expect(DEFAULT_LIMITS.versusMinMessages).toBeGreaterThanOrEqual(VERSUS_HARD_MIN);
+		expect(DEFAULT_LIMITS.versusMaxMessages).toBeLessThanOrEqual(VERSUS_HARD_MAX);
+		expect(DEFAULT_LIMITS.versusMinMessages).toBeLessThanOrEqual(DEFAULT_LIMITS.versusMaxMessages);
+	});
+
+	it('brackets the per-run default of 5', () => {
+		expect(DEFAULT_LIMITS.versusMinMessages).toBeLessThanOrEqual(DEFAULT_VERSUS_MESSAGES);
+		expect(DEFAULT_LIMITS.versusMaxMessages).toBeGreaterThanOrEqual(DEFAULT_VERSUS_MESSAGES);
 	});
 });

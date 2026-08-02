@@ -1,4 +1,10 @@
-import { CF_MAX_RANK, CF_MAX_WEIGHTS_BYTES, type Capability } from './schemas';
+import {
+	CF_MAX_RANK,
+	CF_MAX_WEIGHTS_BYTES,
+	DEFAULT_VERSUS_MAX_MESSAGES,
+	DEFAULT_VERSUS_MIN_MESSAGES,
+	type Capability
+} from './schemas';
 import type {
 	AccessSettings,
 	FeatureFlags,
@@ -75,6 +81,8 @@ export const DEFAULT_LIMITS: LimitsSettings = {
 	inferenceCacheTtl: 60,
 	maxOutputTokens: 512,
 	maxSystemPromptChars: 2000,
+	versusMinMessages: DEFAULT_VERSUS_MIN_MESSAGES,
+	versusMaxMessages: DEFAULT_VERSUS_MAX_MESSAGES,
 	logRetentionDays: 90
 };
 

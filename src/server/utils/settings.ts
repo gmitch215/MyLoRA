@@ -23,6 +23,12 @@ export const STRING_SETTING_KEYS = [
 // structured keys stored as json
 const JSON_KEYS = ['access', 'permissions', 'rateLimits', 'limits', 'features', 'message'] as const;
 
+function clampInt(value: number, min: number, max: number): number {
+	const n = Math.trunc(Number(value));
+	if (!Number.isFinite(n)) return min;
+	return Math.min(Math.max(n, min), max);
+}
+
 async function getJson<T>(name: string, fallback: T): Promise<T> {
 	try {
 		const raw = await kv.get<T>(key(name));
@@ -58,11 +64,16 @@ export async function getRateLimits(): Promise<RateLimits> {
 }
 
 export async function getLimits(): Promise<LimitsSettings> {
-	const l = await getJson('limits', DEFAULT_LIMITS);
+	// spread defaults first: a stored blob written before a field existed would otherwise read undefined
+	const l = { ...DEFAULT_LIMITS, ...(await getJson('limits', DEFAULT_LIMITS)) };
+	const versusMin = clampInt(l.versusMinMessages, VERSUS_HARD_MIN, VERSUS_HARD_MAX);
 	return {
 		...l,
 		maxWeightsBytes: Math.min(CF_MAX_WEIGHTS_BYTES, l.maxWeightsBytes),
-		maxRank: Math.min(CF_MAX_RANK, l.maxRank)
+		maxRank: Math.min(CF_MAX_RANK, l.maxRank),
+		versusMinMessages: versusMin,
+		// max can never fall below min, whatever was stored
+		versusMaxMessages: clampInt(l.versusMaxMessages, versusMin, VERSUS_HARD_MAX)
 	};
 }
 

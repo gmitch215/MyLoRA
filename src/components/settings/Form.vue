@@ -419,6 +419,30 @@
 					/>
 				</UFormField>
 				<UFormField
+					label="Versus Min Messages"
+					help="Lowest messages-per-agent a versus run may use (1-25)"
+				>
+					<UInput
+						v-model.number="limits.versusMinMessages"
+						type="number"
+						:min="VERSUS_HARD_MIN"
+						:max="VERSUS_HARD_MAX"
+						class="w-full"
+					/>
+				</UFormField>
+				<UFormField
+					label="Versus Max Messages"
+					help="Highest messages-per-agent a versus run may use (1-25)"
+				>
+					<UInput
+						v-model.number="limits.versusMaxMessages"
+						type="number"
+						:min="limits.versusMinMessages"
+						:max="VERSUS_HARD_MAX"
+						class="w-full"
+					/>
+				</UFormField>
+				<UFormField
 					label="Log Retention (Days)"
 					help="Purge training logs from storage after this many days (7-365)"
 				>

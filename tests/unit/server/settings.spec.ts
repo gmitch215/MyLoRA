@@ -8,7 +8,12 @@ import {
 	DEFAULT_RATE_LIMITS,
 	PUBLIC_LIMIT_RANGES
 } from '../../../src/shared/defaults';
-import { CF_MAX_RANK, CF_MAX_WEIGHTS_BYTES } from '../../../src/shared/schemas';
+import {
+	CF_MAX_RANK,
+	CF_MAX_WEIGHTS_BYTES,
+	VERSUS_HARD_MAX,
+	VERSUS_HARD_MIN
+} from '../../../src/shared/schemas';
 
 // settings.ts relies on nuxt auto-imports (kv global + the DEFAULT_* / clamp helpers); in plain node
 // none exist, so wire the real values in as globals before importing the module
@@ -28,6 +33,8 @@ vi.stubGlobal('PUBLIC_LIMIT_RANGES', PUBLIC_LIMIT_RANGES);
 vi.stubGlobal('clampPublicLimit', clampPublicLimit);
 vi.stubGlobal('CF_MAX_RANK', CF_MAX_RANK);
 vi.stubGlobal('CF_MAX_WEIGHTS_BYTES', CF_MAX_WEIGHTS_BYTES);
+vi.stubGlobal('VERSUS_HARD_MIN', VERSUS_HARD_MIN);
+vi.stubGlobal('VERSUS_HARD_MAX', VERSUS_HARD_MAX);
 
 let mod: typeof import('../../../src/server/utils/settings');
 
@@ -116,6 +123,40 @@ describe('getLimits caps to cloudflare maxima', () => {
 		const l = await mod.getLimits();
 		expect(l.maxWeightsBytes).toBe(1024);
 		expect(l.maxRank).toBe(4);
+	});
+
+	it('fills defaults for fields a stored blob predates', async () => {
+		// a blob written before the versus fields existed must not read undefined
+		const { versusMinMessages, versusMaxMessages, ...legacy } = DEFAULT_LIMITS;
+		store.set(K('limits'), legacy);
+		const l = await mod.getLimits();
+		expect(l.versusMinMessages).toBe(versusMinMessages);
+		expect(l.versusMaxMessages).toBe(versusMaxMessages);
+	});
+
+	it('clamps the versus range into the hard bounds', async () => {
+		store.set(K('limits'), { ...DEFAULT_LIMITS, versusMinMessages: 0, versusMaxMessages: 999 });
+		const l = await mod.getLimits();
+		expect(l.versusMinMessages).toBe(VERSUS_HARD_MIN);
+		expect(l.versusMaxMessages).toBe(VERSUS_HARD_MAX);
+	});
+
+	it('never lets the versus max fall below the min', async () => {
+		store.set(K('limits'), { ...DEFAULT_LIMITS, versusMinMessages: 8, versusMaxMessages: 2 });
+		const l = await mod.getLimits();
+		expect(l.versusMinMessages).toBe(8);
+		expect(l.versusMaxMessages).toBe(8);
+	});
+
+	it('falls back to the min for a non-numeric versus range', async () => {
+		store.set(K('limits'), {
+			...DEFAULT_LIMITS,
+			versusMinMessages: 'x' as never,
+			versusMaxMessages: null as never
+		});
+		const l = await mod.getLimits();
+		expect(l.versusMinMessages).toBe(VERSUS_HARD_MIN);
+		expect(l.versusMaxMessages).toBe(VERSUS_HARD_MIN);
 	});
 });
 
