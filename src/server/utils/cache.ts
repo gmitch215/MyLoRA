@@ -89,6 +89,7 @@ export const userCacheKey = (id: string) => `user_${safeKey(id)}`;
 export const ADAPTER_LIST_PREFIX = 'list:';
 export const adapterListKey = (scope: string) => `${ADAPTER_LIST_PREFIX}${safeKey(scope)}`;
 export const SETTINGS_CACHE_KEY = 'settings_all';
+export const FEED_CACHE_KEY = 'feed_atom';
 export const PERMISSIONS_CACHE_PREFIX = 'caps:';
 export const capsCacheKey = (role: string) => `${PERMISSIONS_CACHE_PREFIX}${role}`;
 
@@ -97,9 +98,15 @@ export async function invalidateUser(id: string): Promise<void> {
 	await clearCache(userCacheKey(id));
 }
 
+// the atom feed renders the same public rows the grid does
+export async function invalidateFeed(): Promise<void> {
+	await clearCache(FEED_CACHE_KEY);
+}
+
 // any adapter create/update/publish/delete changes what the grid + dashboard lists return
 export async function invalidateAdapterLists(): Promise<void> {
 	await clearCachePrefix(ADAPTER_LIST_PREFIX);
+	await invalidateFeed();
 }
 
 // settings.post changes both the branding blob and the permission matrix

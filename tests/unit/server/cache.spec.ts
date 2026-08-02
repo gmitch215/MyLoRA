@@ -20,8 +20,10 @@ import {
 	cache,
 	clearCache,
 	clearCachePrefix,
+	FEED_CACHE_KEY,
 	getCache,
 	invalidateAdapterLists,
+	invalidateFeed,
 	invalidateSettings,
 	invalidateUser,
 	SETTINGS_CACHE_KEY,
@@ -96,5 +98,30 @@ describe('cache keys', () => {
 		expect(await getCache(userCacheKey('u1'))).toBeNull();
 		expect(await getCache(SETTINGS_CACHE_KEY)).toBeNull();
 		expect(await getCache(adapterListKey('anon:all'))).toBeNull();
+	});
+
+	it('invalidateFeed clears the atom feed entry', async () => {
+		await cache(FEED_CACHE_KEY, '<feed/>', 300);
+		await invalidateFeed();
+		expect(await getCache(FEED_CACHE_KEY)).toBeNull();
+	});
+
+	it('invalidateAdapterLists also busts the feed', async () => {
+		// the whole feed invalidation contract is this one coupling: every adapter writer already
+		// calls invalidateAdapterLists, and none of them know the feed exists
+		await cache(FEED_CACHE_KEY, '<feed/>', 300);
+		await cache(adapterListKey('anon:all'), [], 60);
+
+		await invalidateAdapterLists();
+
+		expect(await getCache(FEED_CACHE_KEY)).toBeNull();
+		expect(await getCache(adapterListKey('anon:all'))).toBeNull();
+	});
+
+	it('leaves unrelated entries alone when busting the feed', async () => {
+		await cache(SETTINGS_CACHE_KEY, { name: 'x' }, 60);
+		await cache(FEED_CACHE_KEY, '<feed/>', 300);
+		await invalidateFeed();
+		expect(await getCache(SETTINGS_CACHE_KEY)).toEqual({ name: 'x' });
 	});
 });

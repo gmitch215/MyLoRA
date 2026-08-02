@@ -47,12 +47,19 @@ useSeoMeta({
 });
 
 useHead({
+	htmlAttrs: { lang: 'en' },
 	link: [
 		// svg (iconify) is preferred when present; ico/png cover uploads + older browsers
 		{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
 		{ rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
 		{ rel: 'icon', type: 'image/png', href: '/favicon.png' },
-		{ rel: 'apple-touch-icon', href: '/favicon.png' }
+		{ rel: 'apple-touch-icon', href: '/favicon.png' },
+		{
+			rel: 'alternate',
+			type: 'application/atom+xml',
+			title: () => `${name.value} Adapters`,
+			href: '/feed.xml'
+		}
 	]
 });
 
