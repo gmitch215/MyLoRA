@@ -20,7 +20,6 @@
 				color="info"
 				variant="subtle"
 				title="Remote Training Machines"
-				class="mb-4"
 			>
 				<template #description>
 					<p>
@@ -32,9 +31,7 @@
 				</template>
 			</UAlert>
 
-			<div class="scrollbar-hide overflow-x-auto">
-				<TrainingMachineTable :auto-testing-ids="autoTestingIds" />
-			</div>
+			<TrainingMachineTable :auto-testing-ids="autoTestingIds" />
 		</template>
 	</UDashboardPanel>
 </template>

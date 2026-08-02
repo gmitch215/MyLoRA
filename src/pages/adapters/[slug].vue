@@ -1,7 +1,7 @@
 <template>
 	<div
 		v-if="adapter"
-		class="w-full max-w-7xl mx-auto px-4 sm:px-8 py-8"
+		class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
 	>
 		<header class="mb-6">
 			<div class="flex flex-wrap items-start justify-between gap-4">
@@ -112,6 +112,7 @@
 							size="sm"
 							class="absolute top-2 right-2"
 							:title="copied ? 'Copied' : 'Copy'"
+							aria-label="Copy Prompt Template"
 							@click="copyTemplate"
 						/>
 					</div>
@@ -231,7 +232,9 @@
 							receive your Cloudflare token.
 						</p>
 						<div class="flex items-start gap-2">
-							<code class="flex-1 rounded bg-elevated px-2 py-1.5 font-mono text-xs break-all">
+							<code
+								class="flex-1 rounded bg-elevated px-2 py-1.5 font-mono text-xs wrap-break-word"
+							>
 								{{ installCmd }}
 							</code>
 							<UButton
@@ -240,6 +243,7 @@
 								variant="outline"
 								size="xs"
 								:title="installCopied ? 'Copied' : 'Copy'"
+								aria-label="Copy Install Command"
 								@click="copyInstall"
 							/>
 						</div>

@@ -46,15 +46,15 @@
 			</p>
 
 			<!-- column headers -->
-			<div class="grid grid-cols-2 gap-x-3 text-xs font-semibold text-muted">
-				<span class="truncate">{{ labelA }}</span>
-				<span class="truncate">{{ labelB }}</span>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 text-xs font-semibold text-muted">
+				<span class="min-w-0 truncate">{{ labelA }}</span>
+				<span class="min-w-0 truncate">{{ labelB }}</span>
 			</div>
 
 			<!-- raw mode: plain answers side by side -->
 			<div
 				v-if="raw"
-				class="grid grid-cols-2 gap-x-3 gap-y-1"
+				class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1"
 			>
 				<p
 					class="rounded-md bg-default/60 px-3 py-2 text-sm whitespace-pre-wrap wrap-break-word text-default"
@@ -71,7 +71,7 @@
 			<!-- diff mode: shared lines collapse full-width, divergent lines align left/right -->
 			<div
 				v-else
-				class="grid grid-cols-2 gap-x-3 gap-y-1"
+				class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1"
 			>
 				<template
 					v-for="(row, r) in rowsFor(pair)"
@@ -79,7 +79,7 @@
 				>
 					<p
 						v-if="row.type === 'eq'"
-						class="col-span-2 rounded-md bg-default/40 px-3 py-2 text-sm whitespace-pre-wrap wrap-break-word text-muted"
+						class="sm:col-span-2 rounded-md bg-default/40 px-3 py-2 text-sm whitespace-pre-wrap wrap-break-word text-muted"
 					>
 						{{ row.left }}
 					</p>

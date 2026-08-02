@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full max-w-2xl mx-auto px-4 sm:px-8 py-8">
+	<div class="w-full max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 		<h1 class="text-2xl font-bold mb-6">Your Profile</h1>
 		<ProfileForm v-if="loggedIn" />
 		<div v-else>

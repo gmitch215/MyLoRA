@@ -22,7 +22,7 @@
 
 		<template #body>
 			<!-- kpi cards computed from the user's adapters -->
-			<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+			<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
 				<UPageCard
 					v-for="kpi in kpis"
 					:key="kpi.label"
@@ -45,103 +45,104 @@
 				</UPageCard>
 			</div>
 
-			<div class="scrollbar-hide overflow-x-auto">
-				<UTable
-					:data="mine"
-					:columns="columns"
-					:loading="adaptersStore.mineLoading"
-					:empty="emptyLabel"
-				>
-					<template #name-cell="{ row }">
-						<UContextMenu :items="buildMenu(row.original)">
-							<div class="cursor-context-menu">
-								<div class="font-medium">{{ row.original.name }}</div>
-								<div class="text-muted text-xs">{{ row.original.slug }}</div>
-							</div>
-						</UContextMenu>
-					</template>
+			<UTable
+				:data="mine"
+				:columns="columns"
+				:loading="adaptersStore.mineLoading"
+				:empty="emptyLabel"
+			>
+				<template #name-cell="{ row }">
+					<UContextMenu :items="buildMenu(row.original)">
+						<div class="cursor-context-menu">
+							<div class="font-medium">{{ row.original.name }}</div>
+							<div class="text-muted text-xs">{{ row.original.slug }}</div>
+						</div>
+					</UContextMenu>
+				</template>
 
-					<template #status-cell="{ row }">
-						<AdapterPushStatus
-							v-if="publishStore.isActive(row.original.id)"
-							compact
-							:job="publishStore.states[row.original.id]?.job ?? null"
-							:status="publishStore.states[row.original.id]?.status || row.original.status"
-							:status-message="publishStore.states[row.original.id]?.message"
+				<template #status-cell="{ row }">
+					<AdapterPushStatus
+						v-if="publishStore.isActive(row.original.id)"
+						compact
+						:job="publishStore.states[row.original.id]?.job ?? null"
+						:status="publishStore.states[row.original.id]?.status || row.original.status"
+						:status-message="publishStore.states[row.original.id]?.message"
+					/>
+					<UBadge
+						v-else
+						:color="statusColor(row.original.status)"
+						variant="subtle"
+						class="capitalize"
+					>
+						{{ row.original.status }}
+					</UBadge>
+				</template>
+
+				<template #baseModel-cell="{ row }">
+					<AdapterBaseBadge :model="row.original.baseModel" />
+				</template>
+
+				<template #downloadCount-cell="{ row }">
+					{{ row.original.downloadCount }}
+				</template>
+
+				<template #inferenceCount-cell="{ row }">
+					{{ row.original.inferenceCount }}
+				</template>
+
+				<template #author-cell="{ row }">
+					<div class="flex items-center gap-2">
+						<Avatar
+							:pathname="row.original.author?.avatarPathname"
+							:display-name="row.original.author?.displayName || 'Unknown'"
+							size="2xs"
 						/>
-						<UBadge
-							v-else
-							:color="statusColor(row.original.status)"
-							variant="subtle"
-							class="capitalize"
-						>
-							{{ row.original.status }}
-						</UBadge>
-					</template>
+						<span class="text-sm">{{ row.original.author?.displayName || 'Unknown' }}</span>
+					</div>
+				</template>
 
-					<template #baseModel-cell="{ row }">
-						<AdapterBaseBadge :model="row.original.baseModel" />
-					</template>
+				<template #uploaded-cell="{ row }">
+					<RelativeTime :date="row.original.created_at" />
+				</template>
 
-					<template #downloadCount-cell="{ row }">
-						{{ row.original.downloadCount }}
-					</template>
+				<template #updated-cell="{ row }">
+					<RelativeTime :date="row.original.updated_at" />
+				</template>
 
-					<template #inferenceCount-cell="{ row }">
-						{{ row.original.inferenceCount }}
-					</template>
-
-					<template #author-cell="{ row }">
-						<div class="flex items-center gap-2">
-							<Avatar
-								:pathname="row.original.author?.avatarPathname"
-								:display-name="row.original.author?.displayName || 'Unknown'"
-								size="2xs"
-							/>
-							<span class="text-sm">{{ row.original.author?.displayName || 'Unknown' }}</span>
-						</div>
-					</template>
-
-					<template #uploaded-cell="{ row }">
-						<RelativeTime :date="row.original.created_at" />
-					</template>
-
-					<template #updated-cell="{ row }">
-						<RelativeTime :date="row.original.updated_at" />
-					</template>
-
-					<template #actions-cell="{ row }">
-						<div class="flex items-center justify-end gap-1 whitespace-nowrap">
-							<UButton
-								icon="mdi:pencil"
-								size="xs"
-								variant="ghost"
-								title="Edit"
-								@click="openEdit(row.original)"
-							/>
-							<UButton
-								v-if="canPublishRow(row.original)"
-								icon="mdi:cloud-upload"
-								size="xs"
-								color="primary"
-								variant="ghost"
-								title="Publish"
-								:loading="publishStore.isActive(row.original.id)"
-								@click="publish(row.original)"
-							/>
-							<UButton
-								v-if="canDeleteRow(row.original)"
-								icon="mdi:delete"
-								size="xs"
-								color="error"
-								variant="ghost"
-								title="Delete"
-								@click="confirmDelete(row.original)"
-							/>
-						</div>
-					</template>
-				</UTable>
-			</div>
+				<template #actions-cell="{ row }">
+					<div class="flex items-center justify-end gap-1 whitespace-nowrap">
+						<UButton
+							icon="mdi:pencil"
+							size="xs"
+							variant="ghost"
+							title="Edit"
+							aria-label="Edit Adapter"
+							@click="openEdit(row.original)"
+						/>
+						<UButton
+							v-if="canPublishRow(row.original)"
+							icon="mdi:cloud-upload"
+							size="xs"
+							color="primary"
+							variant="ghost"
+							title="Publish"
+							aria-label="Publish Adapter"
+							:loading="publishStore.isActive(row.original.id)"
+							@click="publish(row.original)"
+						/>
+						<UButton
+							v-if="canDeleteRow(row.original)"
+							icon="mdi:delete"
+							size="xs"
+							color="error"
+							variant="ghost"
+							title="Delete"
+							aria-label="Delete Adapter"
+							@click="confirmDelete(row.original)"
+						/>
+					</div>
+				</template>
+			</UTable>
 
 			<AdapterFormModal
 				v-model:open="modalOpen"

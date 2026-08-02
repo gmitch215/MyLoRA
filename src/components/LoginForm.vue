@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full max-w-md mx-auto p-6 rounded-lg">
+	<div class="w-full max-w-md mx-auto rounded-lg">
 		<UAlert
 			v-if="success"
 			color="success"

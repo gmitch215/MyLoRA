@@ -2,7 +2,9 @@
 	<UModal
 		:open="open"
 		:title="headerTitle"
-		:class="fullscreen ? 'w-screen h-screen max-w-none! max-h-none!' : 'max-w-4xl w-full'"
+		:ui="{
+			content: fullscreen ? 'w-screen h-dvh max-w-none! max-h-none!' : 'sm:max-w-4xl'
+		}"
 		@update:open="onOpenChange"
 	>
 		<template #header>

@@ -2,18 +2,21 @@
 	<UModal
 		:open="open"
 		:title="title"
-		:class="fullscreen ? 'w-screen h-screen max-w-none! max-h-none!' : 'max-w-[90vw] w-full'"
+		:ui="{
+			content: fullscreen ? 'w-screen h-dvh max-w-none! max-h-none!' : 'sm:max-w-3xl'
+		}"
 		@update:open="onOpenChange"
 	>
 		<template #header>
-			<div class="flex items-center justify-between w-full">
-				<h3 class="text-lg font-semibold text-highlighted">{{ title }}</h3>
-				<div class="flex space-x-2">
+			<div class="flex items-center justify-between gap-2 w-full">
+				<h3 class="min-w-0 truncate text-lg font-semibold text-highlighted">{{ title }}</h3>
+				<div class="flex shrink-0 gap-2">
 					<UButton
 						:icon="fullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'"
 						color="neutral"
 						variant="ghost"
 						:title="fullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
+						aria-label="Toggle Fullscreen"
 						@click="fullscreen = !fullscreen"
 					/>
 					<UButton
@@ -21,6 +24,7 @@
 						color="neutral"
 						variant="ghost"
 						title="Close"
+						aria-label="Close"
 						@click="close"
 					/>
 				</div>

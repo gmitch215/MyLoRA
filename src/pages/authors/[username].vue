@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full max-w-6xl mx-auto px-4 sm:px-8 py-8">
+	<div class="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 		<header class="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-10">
 			<Avatar
 				:pathname="author?.avatarPathname"

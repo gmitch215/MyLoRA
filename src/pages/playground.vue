@@ -18,7 +18,7 @@
 				variant="subtle"
 				title="Unlimited Access for Developers"
 				description="Test any published adapter against any registered Cloudflare account. Developer accounts have no rate limit on the playground by default."
-				class="mb-4 shrink-0"
+				class="shrink-0"
 			/>
 			<AiPlaygroundChat />
 		</template>

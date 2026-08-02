@@ -32,7 +32,6 @@
 				color="warning"
 				variant="subtle"
 				title="No Machines Registered"
-				class="mb-4"
 			>
 				<template #description>
 					Add a training machine before launching a job.

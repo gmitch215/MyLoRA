@@ -17,7 +17,6 @@
 				color="info"
 				variant="subtle"
 				title="Hybrid Cloudflare Accounts"
-				class="mb-4"
 			>
 				<template #description>
 					<p>
@@ -30,7 +29,7 @@
 				</template>
 			</UAlert>
 
-			<div class="mb-6">
+			<div>
 				<CloudflareSlotMeter
 					:used="cf.totalSlotsUsed"
 					:max="totalCapacity"
@@ -38,9 +37,7 @@
 				/>
 			</div>
 
-			<div class="scrollbar-hide overflow-x-auto">
-				<CloudflareAccountsTable />
-			</div>
+			<CloudflareAccountsTable />
 		</template>
 	</UDashboardPanel>
 </template>

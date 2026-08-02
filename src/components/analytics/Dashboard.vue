@@ -18,7 +18,7 @@
 			/>
 		</div>
 
-		<div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+		<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
 			<KpiCard
 				label="Views"
 				:value="data?.kpis.views.value ?? 0"
@@ -129,7 +129,7 @@
 			</div>
 			<div
 				v-else
-				class="scrollbar-hide overflow-x-auto"
+				class="overflow-x-auto"
 			>
 				<table class="min-w-full text-sm">
 					<thead class="text-left text-muted">
@@ -186,7 +186,7 @@
 			</div>
 			<div
 				v-else
-				class="scrollbar-hide overflow-x-auto"
+				class="overflow-x-auto"
 			>
 				<table class="min-w-full text-sm">
 					<thead class="text-left text-muted">

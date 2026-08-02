@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full max-w-7xl mx-auto px-4 sm:px-8 py-8">
+	<div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 		<div class="text-center mb-6">
 			<h1
 				class="text-3xl md:text-5xl font-bold bg-linear-to-r from-primary via-primary to-info bg-clip-text text-transparent py-1"
@@ -54,6 +54,7 @@
 				variant="outline"
 				to="/dashboard/settings"
 				title="Settings"
+				aria-label="Settings"
 			/>
 		</div>
 

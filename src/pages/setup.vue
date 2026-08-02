@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full max-w-xl mx-auto px-4 sm:px-8 py-12">
+	<div class="w-full max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 		<div class="mb-8 text-center">
 			<UIcon
 				name="mdi:rocket-launch"

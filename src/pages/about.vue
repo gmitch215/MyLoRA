@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full max-w-3xl mx-auto px-4 sm:px-8 py-12">
+	<div class="w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 		<div class="flex flex-col items-center text-center mb-10">
 			<UIcon
 				name="mdi:cube-scan"

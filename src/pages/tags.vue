@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full max-w-3xl mx-auto px-4 sm:px-8 py-10">
+	<div class="w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 		<div class="text-center mb-8">
 			<UIcon
 				name="mdi:tag-multiple"
