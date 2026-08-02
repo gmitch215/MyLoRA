@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	adapterSchema,
+	assertAlternatingRoles,
 	cloudflareAccountSchema,
 	contextWindowFor,
 	DEFAULT_CONTEXT_WINDOW,
@@ -368,5 +369,85 @@ describe('settingsSchema blank-tolerant branding', () => {
 		expect(
 			settingsSchema.safeParse({ message: { text: 'Heads up', type: 'warning' } }).success
 		).toBe(true);
+	});
+});
+
+describe('settingsSchema versus limits', () => {
+	const base = {
+		maxWeightsBytes: 1024,
+		maxRank: 8,
+		maxScreenshots: 6,
+		gridPageSize: 24,
+		accountBudgetPerMinute: 300,
+		inferenceCacheTtl: 60,
+		maxOutputTokens: 512,
+		maxSystemPromptChars: 2000,
+		logRetentionDays: 90
+	};
+
+	it('defaults the versus range when an older client omits it', () => {
+		const parsed = settingsSchema.safeParse({ limits: base });
+		expect(parsed.success).toBe(true);
+		expect(parsed.data!.limits!.versusMinMessages).toBe(1);
+		expect(parsed.data!.limits!.versusMaxMessages).toBe(10);
+	});
+
+	it('accepts a range inside the hard bounds', () => {
+		const parsed = settingsSchema.safeParse({
+			limits: { ...base, versusMinMessages: 3, versusMaxMessages: 25 }
+		});
+		expect(parsed.success).toBe(true);
+		expect(parsed.data!.limits!.versusMaxMessages).toBe(25);
+	});
+
+	it('rejects a range outside the hard bounds', () => {
+		expect(settingsSchema.safeParse({ limits: { ...base, versusMaxMessages: 26 } }).success).toBe(
+			false
+		);
+		expect(settingsSchema.safeParse({ limits: { ...base, versusMinMessages: 0 } }).success).toBe(
+			false
+		);
+	});
+
+	it('rejects a fractional message count', () => {
+		expect(settingsSchema.safeParse({ limits: { ...base, versusMinMessages: 2.5 } }).success).toBe(
+			false
+		);
+	});
+});
+
+describe('assertAlternatingRoles', () => {
+	const user = { role: 'user', content: 'q' };
+	const assistant = { role: 'assistant', content: 'a' };
+	const system = { role: 'system', content: 's' };
+
+	it('accepts a conversation that starts on user and alternates', () => {
+		expect(() => assertAlternatingRoles([user])).not.toThrow();
+		expect(() => assertAlternatingRoles([user, assistant, user])).not.toThrow();
+	});
+
+	it('allows one leading system turn', () => {
+		expect(() => assertAlternatingRoles([system, user])).not.toThrow();
+		expect(() => assertAlternatingRoles([system, user, assistant, user])).not.toThrow();
+	});
+
+	it('rejects a conversation that leads with assistant', () => {
+		// the versus regression: alternating, but starting on the wrong role
+		expect(() => assertAlternatingRoles([assistant, user])).toThrow(/must alternate/);
+		expect(() => assertAlternatingRoles([system, assistant, user])).toThrow(/must alternate/);
+	});
+
+	it('rejects two turns of the same role in a row', () => {
+		expect(() => assertAlternatingRoles([user, user])).toThrow(/must alternate/);
+		expect(() => assertAlternatingRoles([user, assistant, assistant])).toThrow(/must alternate/);
+	});
+
+	it('rejects an empty conversation and a system-only one', () => {
+		expect(() => assertAlternatingRoles([])).toThrow(/must alternate/);
+		expect(() => assertAlternatingRoles([system])).toThrow(/must alternate/);
+	});
+
+	it('names the offending sequence in the message', () => {
+		expect(() => assertAlternatingRoles([assistant, user])).toThrow(/assistant,user/);
 	});
 });

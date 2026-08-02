@@ -112,6 +112,10 @@ function runBody(
 }
 
 function mockText(target: InferTarget, messages: ChatMessage[]): string {
+	// the mock enforces the same role contract the live model does, so the e2e lane catches a
+	// malformed conversation instead of it only failing in production
+	assertAlternatingRoles(messages);
+	assertAlternatingRoles(messages);
 	const last = messages[messages.length - 1]?.content ?? '';
 	const tag = target.lora ? `lora:${target.lora}` : `base:${target.baseModel}`;
 	return `[mock ${tag}] ${last}`.slice(0, 400);

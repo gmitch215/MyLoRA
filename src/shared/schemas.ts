@@ -3,6 +3,12 @@ import * as z from 'zod';
 export const CF_MAX_RANK = 32;
 export const CF_MAX_WEIGHTS_BYTES = 300 * 1024 * 1024;
 
+// hard bounds on the admin-configurable versus message range (per agent, so 25 -> 50 calls)
+export const VERSUS_HARD_MIN = 1;
+export const VERSUS_HARD_MAX = 25;
+export const DEFAULT_VERSUS_MIN_MESSAGES = 1;
+export const DEFAULT_VERSUS_MAX_MESSAGES = 10;
+
 export const MODEL_TYPES = ['mistral', 'gemma', 'llama', 'qwen'] as const;
 export const ROLES = ['administrator', 'manager', 'developer'] as const;
 export const VISIBILITIES = ['public', 'unlisted', 'private'] as const;
@@ -69,6 +75,22 @@ export function contextWindowFor(model: string): number {
 // rough token estimate (~4 chars/token) used for client-side context metering
 export function estimateTokens(text: string): number {
 	return Math.ceil((text || '').length / 4);
+}
+
+/**
+ * Throw unless `messages` matches the chat-template contract Workers AI enforces: after an
+ * optional leading system turn the conversation must START on `user` and strictly alternate.
+ * Violating it fails upstream with a 400 "Conversation roles must alternate user/assistant/...".
+ */
+export function assertAlternatingRoles(messages: { role: string; content: string }[]): void {
+	const turns = messages[0]?.role === 'system' ? messages.slice(1) : messages;
+	const bad = turns.some((m, i) => m.role !== (i % 2 === 0 ? 'user' : 'assistant'));
+	if (!turns.length || bad) {
+		throw new Error(
+			'Conversation roles must alternate user/assistant/user/assistant/... ' +
+				`(got ${messages.map((m) => m.role).join(',') || 'nothing'})`
+		);
+	}
 }
 
 export const SLUG_RE = /^[a-z0-9-]+$/;
@@ -248,6 +270,20 @@ export const settingsSchema = z.object({
 			inferenceCacheTtl: z.number().int().min(0).max(3600),
 			maxOutputTokens: z.number().int().min(16).max(4096),
 			maxSystemPromptChars: z.number().int().min(0).max(8000),
+			// bounds of the playground versus messages-per-agent control; defaulted so an older
+			// cached admin bundle that omits them cannot 400
+			versusMinMessages: z
+				.number()
+				.int()
+				.min(VERSUS_HARD_MIN)
+				.max(VERSUS_HARD_MAX)
+				.default(DEFAULT_VERSUS_MIN_MESSAGES),
+			versusMaxMessages: z
+				.number()
+				.int()
+				.min(VERSUS_HARD_MIN)
+				.max(VERSUS_HARD_MAX)
+				.default(DEFAULT_VERSUS_MAX_MESSAGES),
 			// days to keep training logs (+ download-only artifacts) in R2 before the cleanup pass purges them
 			logRetentionDays: z.number().int().min(7).max(365)
 		})
