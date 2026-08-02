@@ -31,7 +31,9 @@
 				</div>
 			</template>
 			<template #host-cell="{ row }">
-				<span class="font-mono text-muted">{{ row.original.host }}:{{ row.original.port }}</span>
+				<span class="block max-w-56 truncate font-mono text-muted"
+					>{{ row.original.host }}:{{ row.original.port }}</span
+				>
 			</template>
 			<template #connectionType-cell="{ row }">
 				<UBadge
@@ -82,7 +84,7 @@
 				>
 			</template>
 			<template #actions-cell="{ row }">
-				<div class="flex items-center gap-1">
+				<div class="flex flex-wrap items-center gap-1">
 					<UButton
 						icon="mdi:lan-connect"
 						size="xs"
@@ -144,6 +146,7 @@
 			:title="editing ? 'Edit Machine' : 'Add Machine'"
 			:dismissible="false"
 			:close="false"
+			:ui="{ content: 'sm:max-w-2xl' }"
 		>
 			<template #body>
 				<TrainingMachineForm
@@ -409,11 +412,13 @@ function canManage(machine: PublicMachine) {
 	return !!machine.ownerId && machine.ownerId === auth.user?.id;
 }
 
-function healthColor(h: MachineHealth) {
-	if (h === 'ok') return 'success';
-	if (h === 'degraded' || h === 'at_capacity') return 'warning';
-	if (h === 'unreachable' || h === 'auth_failed') return 'error';
-	if (h === 'running') return 'info';
+// param is `health`, not `h`: a plain param named after a vue auto-import suppresses the import
+// for the whole surrounding scope under nuxt 4.5's oxc scanner
+function healthColor(health: MachineHealth) {
+	if (health === 'ok') return 'success';
+	if (health === 'degraded' || health === 'at_capacity') return 'warning';
+	if (health === 'unreachable' || health === 'auth_failed') return 'error';
+	if (health === 'running') return 'info';
 	return 'neutral';
 }
 const HEALTH_LABELS: Record<MachineHealth, string> = {
@@ -426,8 +431,8 @@ const HEALTH_LABELS: Record<MachineHealth, string> = {
 	running: 'Running',
 	at_capacity: 'At Capacity'
 };
-function healthLabel(h: MachineHealth) {
-	return HEALTH_LABELS[h] ?? 'Unchecked';
+function healthLabel(health: MachineHealth) {
+	return HEALTH_LABELS[health] ?? 'Unchecked';
 }
 
 function formatVram(mb: number) {

@@ -2,15 +2,17 @@
 	<UModal
 		:open="open"
 		title="New Training Job"
-		:class="fullscreen ? 'w-screen h-screen max-w-none! max-h-none!' : 'max-w-3xl w-full'"
+		:ui="{
+			content: fullscreen ? 'w-screen h-dvh max-w-none! max-h-none!' : 'sm:max-w-3xl'
+		}"
 		@update:open="onOpenChange"
 	>
 		<template #header>
-			<div class="flex items-center justify-between w-full">
-				<h3 class="text-lg font-semibold text-highlighted">
+			<div class="flex items-center justify-between gap-2 w-full">
+				<h3 class="min-w-0 truncate text-lg font-semibold text-highlighted">
 					{{ prefill ? 'Relaunch Training Job' : 'New Training Job' }}
 				</h3>
-				<div class="flex space-x-2">
+				<div class="flex shrink-0 gap-2">
 					<UButton
 						:icon="fullscreen ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'"
 						color="neutral"
@@ -82,6 +84,7 @@
 							type="file"
 							multiple
 							class="hidden"
+							aria-label="Choose Document Files"
 							@change="onDocFilesPicked"
 						/>
 						<div class="flex flex-wrap items-center gap-2">
