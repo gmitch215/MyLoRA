@@ -27,7 +27,7 @@ export function usePlaygroundTargets() {
 			]);
 			models.value = Array.isArray(m) ? m : [];
 			// published + migrated adapters are testable in the playground
-			adapters.value = (a.items ?? []).filter((x) => isTestable(x.status));
+			adapters.value = (a.items ?? []).filter((x) => isTestable(x.status, x.endpointId));
 			loaded.value = true;
 		})().finally(() => {
 			inflight = null;

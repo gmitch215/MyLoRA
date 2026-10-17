@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
 		const rows = await db.select().from(adapters).where(eq(adapters.id, adapterId)).limit(1);
 		const row = rows[0];
 		if (!row) throw createError({ statusCode: 404, statusMessage: 'Adapter not found' });
-		if (!isTestable(row.status)) {
+		if (!isTestable(row.status, row.endpointId)) {
 			throw createError({ statusCode: 409, statusMessage: 'Adapter is not available for testing' });
 		}
 		target = adapterTarget(toAdapter(row));

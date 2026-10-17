@@ -2,11 +2,21 @@ import { desc, eq } from 'drizzle-orm';
 import type { H3Event } from 'h3';
 import { db } from 'hub:db';
 import { adapters, cloudflareAccounts } from 'hub:db:schema';
+import { getCurrentUser } from './auth';
 import { describeCfError, isMockCf } from './cloudflare';
 import { decryptToken } from './crypto';
+import { endpointChat, endpointChatStream, type EndpointCall } from './endpoint-client';
+import { loadUsableEndpoint } from './endpoints';
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-export type InferTarget = { baseModel: string; lora?: string; accountId?: string | null };
+export type InferTarget = {
+	baseModel: string;
+	lora?: string;
+	accountId?: string | null;
+	// run on an openai-compatible endpoint; endpointModel is the model name it is asked for
+	endpointId?: string | null;
+	endpointModel?: string | null;
+};
 
 type ResolvedTarget = {
 	baseModel: string;
@@ -16,6 +26,19 @@ type ResolvedTarget = {
 	isDefaultAccount: boolean;
 };
 
+// the url, key and model for an endpoint-served target; refuses a private endpoint to other users
+async function endpointCall(event: H3Event, target: InferTarget): Promise<EndpointCall> {
+	const { row, apiKey } = await loadUsableEndpoint(
+		target.endpointId!,
+		await getCurrentUser(event).catch(() => null)
+	);
+	return {
+		baseUrl: row.baseUrl,
+		apiKey,
+		model: target.endpointModel || row.defaultModel || target.baseModel
+	};
+}
+
 function aiBinding(event: H3Event): any {
 	const fromCtx = (event.context as any)?.cloudflare?.env?.AI;
 	if (fromCtx) return fromCtx;
@@ -23,6 +46,13 @@ function aiBinding(event: H3Event): any {
 }
 
 export function adapterTarget(adapter: Adapter): InferTarget {
+	if (adapter.endpointId) {
+		return {
+			baseModel: adapter.baseModel,
+			endpointId: adapter.endpointId,
+			endpointModel: adapter.endpointModel || adapter.slug
+		};
+	}
 	return {
 		baseModel: adapter.baseModel,
 		lora: adapter.finetuneName || adapter.finetuneId || '',
@@ -115,7 +145,6 @@ function mockText(target: InferTarget, messages: ChatMessage[]): string {
 	// the mock enforces the same role contract the live model does, so the e2e lane catches a
 	// malformed conversation instead of it only failing in production
 	assertAlternatingRoles(messages);
-	assertAlternatingRoles(messages);
 	const last = messages[messages.length - 1]?.content ?? '';
 	const tag = target.lora ? `lora:${target.lora}` : `base:${target.baseModel}`;
 	return `[mock ${tag}] ${last}`.slice(0, 400);
@@ -153,6 +182,9 @@ export async function runInference(
 	messages: ChatMessage[],
 	opts: { maxTokens?: number } = {}
 ): Promise<InferenceResult> {
+	if (target.endpointId) {
+		return endpointChat(await endpointCall(event, target), messages, opts);
+	}
 	if (isMockCf()) {
 		const response = mockText(target, messages);
 		return { response, outputTokens: estimateTokens(response) };
@@ -180,6 +212,9 @@ export async function runInferenceStream(
 	messages: ChatMessage[],
 	opts: { maxTokens?: number } = {}
 ): Promise<ReadableStream<Uint8Array>> {
+	if (target.endpointId) {
+		return endpointChatStream(await endpointCall(event, target), messages, opts);
+	}
 	if (isMockCf()) {
 		const text = mockText(target, messages);
 		// emit several frames (one per word) so the streaming render path is exercised, not one blob

@@ -1,6 +1,7 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { adapters, users } from 'hub:db:schema';
+import { loadEndpoint } from '~/server/utils/endpoints';
 
 export default defineEventHandler(async (event) => {
 	await ensureDatabase();
@@ -21,7 +22,8 @@ export default defineEventHandler(async (event) => {
 				status: adapters.status,
 				baseModel: adapters.baseModel,
 				modelType: adapters.modelType,
-				rank: adapters.rank
+				rank: adapters.rank,
+				endpointId: adapters.endpointId
 			})
 			.from(adapters)
 			.where(eq(adapters.id, id))
@@ -55,6 +57,37 @@ export default defineEventHandler(async (event) => {
 	if (data.iconName !== undefined) patch.iconName = data.iconName || null;
 	if (data.iconColor !== undefined) patch.iconColor = data.iconColor || null;
 	if (data.visibility !== undefined) patch.visibility = data.visibility;
+
+	// serving an adapter from an endpoint points the tester at a url, so it needs the same
+	// capability as registering one
+	if (data.endpointId !== undefined || data.endpointModel !== undefined) {
+		const user = await requireAuthed(event);
+		if (!(await capabilitiesFor(user.role)).canManageMachines) {
+			throw createError({
+				statusCode: 403,
+				statusMessage: 'Serving from an endpoint requires the Manage Machines capability'
+			});
+		}
+		if (data.endpointId !== undefined) {
+			if (!data.endpointId) {
+				patch.endpointId = null;
+				patch.endpointModel = null;
+			} else {
+				// same scope as the endpoint routes: a personal endpoint is not another user's to attach to,
+				// and its existence is not confirmed to them
+				const endpoint = await loadEndpoint(data.endpointId);
+				if (
+					!endpoint ||
+					(!endpoint.shared && endpoint.ownerId !== user.id && user.role !== 'administrator')
+				) {
+					throw createError({ statusCode: 400, statusMessage: 'That endpoint does not exist' });
+				}
+				patch.endpointId = data.endpointId;
+			}
+		}
+		const bound = patch.endpointId === undefined ? current.endpointId : patch.endpointId;
+		if (data.endpointModel !== undefined && bound) patch.endpointModel = data.endpointModel || null;
+	}
 
 	// keep slug globally unique if it changed
 	if (data.slug !== undefined) {

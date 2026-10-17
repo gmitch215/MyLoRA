@@ -42,7 +42,7 @@ export function useAdapterMenu(opts: MenuOpts = {}) {
 						'Install command copied'
 					)
 			});
-		if (auth.loggedIn && isTestable(a.status))
+		if (auth.loggedIn && isTestable(a.status, a.endpointId))
 			primary.push({
 				label: 'Test in Playground',
 				icon: 'mdi:flask',

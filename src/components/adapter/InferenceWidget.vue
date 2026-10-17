@@ -59,7 +59,7 @@
 
 		<!-- only published/migrated adapters are testable -->
 		<UAlert
-			v-if="!isTestable(adapter.status)"
+			v-if="!isTestable(adapter.status, adapter.endpointId)"
 			color="neutral"
 			variant="subtle"
 			icon="mdi:information-outline"

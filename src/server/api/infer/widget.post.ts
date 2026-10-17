@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
 	const rows = await db.select().from(adapters).where(eq(adapters.id, adapterId)).limit(1);
 	const row = rows[0];
 	if (!row) throw createError({ statusCode: 404, statusMessage: 'Adapter not found' });
-	if (!isTestable(row.status)) {
+	if (!isTestable(row.status, row.endpointId)) {
 		throw createError({ statusCode: 409, statusMessage: 'Adapter is not available for testing' });
 	}
 
@@ -86,8 +86,11 @@ export default defineEventHandler(async (event) => {
 		gate = await enforceInferenceBudget(event, rateLimits[tierName], tierName, user);
 	}
 
-	const cfAccountId = await resolveCfAccountId(row.accountId);
-	await accountBudgetGuard(event, cfAccountId, limits.accountBudgetPerMinute);
+	// the per-minute guard protects whatever serves the adapter: a Cloudflare account or an endpoint
+	const budgetKey = row.endpointId
+		? `endpoint:${row.endpointId}`
+		: await resolveCfAccountId(row.accountId);
+	await accountBudgetGuard(event, budgetKey, limits.accountBudgetPerMinute);
 
 	// charge the prompt up front (the budget was already verified above)
 	if (gate) await recordPrompt(gate);

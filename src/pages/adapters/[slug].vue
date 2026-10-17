@@ -141,7 +141,7 @@
 					</div>
 				</section>
 
-				<section v-if="isTestable(adapter.status)">
+				<section v-if="isTestable(adapter.status, adapter.endpointId)">
 					<h2 class="text-xl font-semibold mb-3">Try It</h2>
 					<AdapterInferenceWidget :adapter="adapter" />
 				</section>
