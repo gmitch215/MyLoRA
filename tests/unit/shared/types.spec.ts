@@ -17,6 +17,7 @@ import {
 	parseScanEstimateSeconds,
 	parseTrainingProgress,
 	parseTrainingSeries,
+	screenshotUrl,
 	trainingEtaSeconds,
 	type AdapterStatus,
 	type JobStatus,
@@ -266,6 +267,21 @@ describe('trainingEtaSeconds step-extrapolation + fallback branches', () => {
 			fallbackEtaSeconds: 250
 		});
 		expect(eta).toBe(250);
+	});
+});
+
+describe('screenshotUrl', () => {
+	it('encodes spaces and narrow no-break spaces per segment', () => {
+		expect(screenshotUrl('adapters/a1/screenshots/Shot 12.35.53 AM-x.png')).toBe(
+			'/files/adapters/a1/screenshots/Shot%2012.35.53%E2%80%AFAM-x.png'
+		);
+	});
+
+	it('passes absolute urls through', () => {
+		expect(screenshotUrl('https://cdn.example.com/a b.png')).toBe(
+			'https://cdn.example.com/a b.png'
+		);
+		expect(screenshotUrl('/files/x.png')).toBe('/files/x.png');
 	});
 });
 

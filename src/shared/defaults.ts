@@ -3,15 +3,18 @@ import {
 	CF_MAX_WEIGHTS_BYTES,
 	DEFAULT_VERSUS_MAX_MESSAGES,
 	DEFAULT_VERSUS_MIN_MESSAGES,
+	toolingSettingsSchema,
 	type Capability
 } from './schemas';
 import type {
 	AccessSettings,
 	FeatureFlags,
 	LimitsSettings,
+	MachineTooling,
 	PermissionMatrix,
 	RateLimits,
-	Role
+	Role,
+	ToolingSettings
 } from './types';
 
 // administrator always has every capability; this is the implicit top of the matrix
@@ -85,6 +88,34 @@ export const DEFAULT_LIMITS: LimitsSettings = {
 	versusMaxMessages: DEFAULT_VERSUS_MAX_MESSAGES,
 	logRetentionDays: 90
 };
+
+// vllm 0.31.0 is the PyPI release of 2026-10-05; cloudflared 2026.10.0 has built-in checksums
+// (server/utils/tooling.ts); both were chosen from release dates and not run on real hardware
+export const DEFAULT_TOOLING: ToolingSettings = {
+	autoInstall: true,
+	pythonVersion: '3.11',
+	vllmVersion: '0.31.0',
+	cloudflaredVersion: '2026.10.0',
+	downloadRetries: 5,
+	networkWaitMinutes: 10,
+	bandwidthLimitKbps: 0
+};
+
+/** Layers an override onto a base, keeping the base for any field that is missing or invalid. */
+export function mergeTooling(
+	base: ToolingSettings,
+	override: MachineTooling | null | undefined
+): ToolingSettings {
+	const out: Record<string, unknown> = { ...base };
+	if (!override) return out as ToolingSettings;
+	for (const key of Object.keys(toolingSettingsSchema.shape) as (keyof ToolingSettings)[]) {
+		const value = override[key];
+		if (value === undefined || value === null) continue;
+		const checked = toolingSettingsSchema.shape[key].safeParse(value);
+		if (checked.success) out[key] = checked.data;
+	}
+	return out as ToolingSettings;
+}
 
 export const DEFAULT_FEATURES: FeatureFlags = {
 	cfGetEnabled: false,

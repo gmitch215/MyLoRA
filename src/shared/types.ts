@@ -13,8 +13,16 @@ export type AdapterStatus =
 
 // statuses whose adapters can be run in the widget + playground
 export const TESTABLE_STATUSES: AdapterStatus[] = ['published', 'migrated'];
-export function isTestable(status: AdapterStatus): boolean {
-	return TESTABLE_STATUSES.includes(status);
+// an endpoint-served adapter is testable as soon as it is listed; it never has to reach Cloudflare
+export function isTestable(status: AdapterStatus, endpointId?: string | null): boolean {
+	if (TESTABLE_STATUSES.includes(status)) return true;
+	return !!endpointId && status === 'listed';
+}
+
+// r2 pathnames can hold spaces; an unencoded one breaks the srcset nuxt image builds
+export function screenshotUrl(pathname: string): string {
+	if (/^(https?:)?\//.test(pathname)) return pathname;
+	return `/files/${pathname.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 export type PublicUser = {
@@ -56,6 +64,9 @@ export type Adapter = {
 	accountId?: string | null;
 	finetuneId?: string | null;
 	finetuneName?: string | null;
+	// set when an openai-compatible endpoint (not Workers AI) serves this adapter
+	endpointId?: string | null;
+	endpointModel?: string | null;
 	authorId?: string | null;
 	author?: PublicUser | null;
 	status: AdapterStatus;
@@ -78,6 +89,66 @@ export type PublicCloudflareAccount = {
 	isDefault: boolean;
 	adapterCount: number;
 	isActive: boolean;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type EndpointHealth = 'unchecked' | 'ok' | 'unreachable' | 'auth_failed';
+export type ServeStatus =
+	'queued' | 'provisioning' | 'starting' | 'ready' | 'stopping' | 'stopped' | 'failed';
+export type ServeTunnel = 'ngrok' | 'cloudflared';
+
+export const TERMINAL_SERVE_STATUSES: ServeStatus[] = ['stopped', 'failed'];
+
+// what a serve job runs; the secrets (hf token, tunnel token, api key) are never part of it
+export type ServeConfig = {
+	baseModel: string;
+	port: number;
+	tunnel: ServeTunnel;
+	maxLoraRank: number;
+	// public hostname of a named cloudflared tunnel
+	hostname?: string;
+	// where the ngrok authtoken comes from: 'auto', 'machine', 'server' or a stored token id
+	ngrokToken?: string;
+	adapters: { adapterId: string; name: string }[];
+};
+
+// never includes the token; only the last4 for display
+export type PublicNgrokToken = {
+	id: string;
+	label: string;
+	tokenLast4?: string | null;
+	ownerId?: string | null;
+	shared: boolean;
+	isDefault: boolean;
+	isActive: boolean;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type NgrokTokenList = { tokens: PublicNgrokToken[]; serverSecret: boolean };
+
+// never includes the api key; only the last4 for display
+export type PublicEndpoint = {
+	id: string;
+	label: string;
+	ownerId?: string | null;
+	shared: boolean;
+	source: 'external' | 'vllm';
+	baseUrl: string;
+	defaultModel?: string | null;
+	keyLast4?: string | null;
+	isActive: boolean;
+	health: EndpointHealth;
+	lastDiagnosis?: string | null;
+	lastCheckedAt?: string | null;
+	machineId?: string | null;
+	serveStatus?: ServeStatus | null;
+	serve?: ServeConfig | null;
+	logTail?: string | null;
+	adapterCount: number;
+	startedAt?: string | null;
+	stoppedAt?: string | null;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -105,6 +176,18 @@ export type LimitsSettings = {
 	versusMaxMessages: number;
 	logRetentionDays: number;
 };
+
+// what the vLLM serve job installs on a machine, and how hard it tries; a machine can override any field
+export type ToolingSettings = {
+	autoInstall: boolean;
+	pythonVersion: string;
+	vllmVersion: string;
+	cloudflaredVersion: string;
+	downloadRetries: number;
+	networkWaitMinutes: number;
+	bandwidthLimitKbps: number;
+};
+export type MachineTooling = Partial<ToolingSettings>;
 
 export type FeatureFlags = { cfGetEnabled: boolean; cfDeleteEnabled: boolean };
 
@@ -260,6 +343,8 @@ export type PublicMachine = {
 	gpuInfo?: GpuInfo | null;
 	systemInfo?: SystemInfo | null;
 	toolingReady: boolean;
+	// per-machine overrides of the tooling settings; null inherits every field
+	tooling?: MachineTooling | null;
 	hasSelfReport: boolean;
 	isActive: boolean;
 	createdAt: string;
@@ -723,3 +808,49 @@ export function formatBytes(bytes: number): string {
 	const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
 	return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
+
+export type MailTransport = 'binding' | 'cloudflare' | 'smtp';
+export type SmtpTlsMode = 'starttls' | 'implicit' | 'off';
+
+export type MailStatus = {
+	configured: boolean;
+	transport: MailTransport | null;
+	source: 'env' | 'settings' | null;
+	reason?: string;
+};
+
+export type MailSettings = {
+	enabled: boolean;
+	transport: MailTransport;
+	fromAddress: string;
+	fromName: string;
+	cloudflareAccountId: string;
+	smtpHost: string;
+	smtpPort: number;
+	smtpTls: SmtpTlsMode;
+	smtpUsername: string;
+	notifyOn: 'published' | 'listed';
+	hasCloudflareApiToken: boolean;
+	hasSmtpPassword: boolean;
+	secretsReadable: boolean;
+	bindingAvailable: boolean;
+	envOverride: boolean;
+	status: MailStatus;
+	subscribers: { active: number; pending: number };
+	outbox: { pending: number; failed: number };
+};
+
+export type SubscriberRow = {
+	id: string;
+	email: string;
+	status: 'pending' | 'active';
+	createdAt: string;
+	confirmedAt: string | null;
+};
+
+export type NotificationPrefs = {
+	email: string;
+	emailConfirmed: boolean;
+	notifyJobs: boolean;
+	mailEnabled: boolean;
+};

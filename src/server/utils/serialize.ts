@@ -53,6 +53,8 @@ export function toAdapter(row: AdapterRow, author?: Partial<UserRow> | null): Ad
 		accountId: row.accountId,
 		finetuneId: row.finetuneId,
 		finetuneName: row.finetuneName,
+		endpointId: row.endpointId,
+		endpointModel: row.endpointModel,
 		authorId: row.authorId,
 		author: author ? toPublicUser(author) : null,
 		status: row.status,

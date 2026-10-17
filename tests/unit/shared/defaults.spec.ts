@@ -5,6 +5,8 @@ import {
 	clampPublicLimit,
 	DEFAULT_LIMITS,
 	DEFAULT_PERMISSIONS,
+	DEFAULT_TOOLING,
+	mergeTooling,
 	PUBLIC_LIMIT_RANGES
 } from '../../../src/shared/defaults';
 import { VERSUS_HARD_MAX, VERSUS_HARD_MIN } from '../../../src/shared/schemas';
@@ -58,5 +60,51 @@ describe('DEFAULT_LIMITS versus range', () => {
 	it('brackets the per-run default of 5', () => {
 		expect(DEFAULT_LIMITS.versusMinMessages).toBeLessThanOrEqual(DEFAULT_VERSUS_MESSAGES);
 		expect(DEFAULT_LIMITS.versusMaxMessages).toBeGreaterThanOrEqual(DEFAULT_VERSUS_MESSAGES);
+	});
+});
+
+describe('mergeTooling', () => {
+	it('installs by default, which is the contract training already follows', () => {
+		expect(DEFAULT_TOOLING.autoInstall).toBe(true);
+	});
+
+	it('returns a copy of the base for no override', () => {
+		for (const none of [null, undefined, {}]) {
+			const merged = mergeTooling(DEFAULT_TOOLING, none);
+			expect(merged).toEqual(DEFAULT_TOOLING);
+			expect(merged).not.toBe(DEFAULT_TOOLING);
+		}
+	});
+
+	it('layers only the fields the override carries', () => {
+		const merged = mergeTooling(DEFAULT_TOOLING, { vllmVersion: '0.30.0', autoInstall: false });
+		expect(merged).toEqual({ ...DEFAULT_TOOLING, vllmVersion: '0.30.0', autoInstall: false });
+	});
+
+	it('keeps a false and a zero override instead of reading them as blank', () => {
+		const merged = mergeTooling(
+			{ ...DEFAULT_TOOLING, bandwidthLimitKbps: 900 },
+			{ autoInstall: false, bandwidthLimitKbps: 0 }
+		);
+		expect(merged.autoInstall).toBe(false);
+		expect(merged.bandwidthLimitKbps).toBe(0);
+	});
+
+	it('ignores an invalid or null field and keeps the base for it', () => {
+		const merged = mergeTooling(DEFAULT_TOOLING, {
+			vllmVersion: 'latest; rm -rf /',
+			downloadRetries: 99,
+			pythonVersion: null as never,
+			cloudflaredVersion: '2026.9.3'
+		});
+		expect(merged.vllmVersion).toBe(DEFAULT_TOOLING.vllmVersion);
+		expect(merged.downloadRetries).toBe(DEFAULT_TOOLING.downloadRetries);
+		expect(merged.pythonVersion).toBe(DEFAULT_TOOLING.pythonVersion);
+		expect(merged.cloudflaredVersion).toBe('2026.9.3');
+	});
+
+	it('never writes keys the schema does not know', () => {
+		const merged = mergeTooling(DEFAULT_TOOLING, { rogue: 'x' } as never);
+		expect(Object.keys(merged).sort()).toEqual(Object.keys(DEFAULT_TOOLING).sort());
 	});
 });

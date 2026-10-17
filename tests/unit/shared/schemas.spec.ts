@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_TOOLING } from '../../../src/shared/defaults';
 import {
 	adapterSchema,
 	assertAlternatingRoles,
@@ -9,7 +10,13 @@ import {
 	firstZodIssueMessage,
 	hfModelFor,
 	machineCreateSchema,
+	machineToolingSchema,
+	machineUpdateSchema,
+	ngrokTokenSchema,
+	ngrokTokenUpdateSchema,
+	serveStartSchema,
 	settingsSchema,
+	toolingSettingsSchema,
 	trainingConfigSchema,
 	trainingJobCreateSchema,
 	userCreateSchema,
@@ -413,6 +420,98 @@ describe('settingsSchema versus limits', () => {
 		expect(settingsSchema.safeParse({ limits: { ...base, versusMinMessages: 2.5 } }).success).toBe(
 			false
 		);
+	});
+});
+
+describe('tooling schemas', () => {
+	const full = { ...DEFAULT_TOOLING };
+
+	it('accepts the defaults and a settings payload that carries them', () => {
+		expect(toolingSettingsSchema.safeParse(full).success).toBe(true);
+		expect(settingsSchema.safeParse({ tooling: full }).success).toBe(true);
+		expect(settingsSchema.safeParse({}).success).toBe(true);
+	});
+
+	it.each([
+		['vllmVersion', '0.31.0; rm -rf /'],
+		['vllmVersion', 'latest'],
+		['vllmVersion', '0.31.0-rc1'],
+		['cloudflaredVersion', '2026.10'],
+		['cloudflaredVersion', 'v2026.10.0'],
+		['pythonVersion', '2.7'],
+		['pythonVersion', '3.11; ls'],
+		['downloadRetries', 0],
+		['downloadRetries', 11],
+		['networkWaitMinutes', -1],
+		['networkWaitMinutes', 121],
+		['bandwidthLimitKbps', -5],
+		['bandwidthLimitKbps', 1.5]
+	])('rejects %s = %s', (key, value) => {
+		expect(toolingSettingsSchema.safeParse({ ...full, [key]: value }).success).toBe(false);
+	});
+
+	it.each([
+		['vllmVersion', '0.31.0'],
+		['vllmVersion', '0.31.0rc1'],
+		['vllmVersion', '0.11.0.post1'],
+		['vllmVersion', '1.0'],
+		['cloudflaredVersion', '2026.9.3'],
+		['pythonVersion', '3.12'],
+		['pythonVersion', '3.11.9'],
+		['bandwidthLimitKbps', 0],
+		['networkWaitMinutes', 0]
+	])('accepts %s = %s', (key, value) => {
+		expect(toolingSettingsSchema.safeParse({ ...full, [key]: value }).success).toBe(true);
+	});
+
+	it('lets a machine override carry any subset, including none', () => {
+		expect(machineToolingSchema.safeParse({}).success).toBe(true);
+		expect(machineToolingSchema.safeParse({ vllmVersion: '0.30.0' }).success).toBe(true);
+		expect(machineToolingSchema.safeParse({ autoInstall: false }).success).toBe(true);
+		expect(machineToolingSchema.safeParse({ vllmVersion: 'nope' }).success).toBe(false);
+	});
+
+	it('takes an override on a machine, and null to clear it on an update', () => {
+		const base = { label: 'Box', host: 'gpu.example.com', username: 'ubuntu' };
+		expect(
+			machineCreateSchema.safeParse({ ...base, tooling: { downloadRetries: 3 } }).success
+		).toBe(true);
+		expect(machineUpdateSchema.safeParse({ tooling: null }).success).toBe(true);
+		expect(machineUpdateSchema.safeParse({ tooling: { downloadRetries: 99 } }).success).toBe(false);
+	});
+});
+
+describe('ngrok token schemas', () => {
+	const token = 'abcdefghij0123456789_KLMNO-pqrst';
+
+	it('requires a label and a plausible token, and defaults the flags off', () => {
+		const parsed = ngrokTokenSchema.parse({ label: 'Team', token });
+		expect(parsed).toMatchObject({ shared: false, isDefault: false });
+		expect(ngrokTokenSchema.safeParse({ label: '', token }).success).toBe(false);
+		expect(ngrokTokenSchema.safeParse({ label: 'x', token: 'short' }).success).toBe(false);
+	});
+
+	it('rejects characters that could break out of the config file', () => {
+		for (const bad of [`${token}\n`, `${token} extra`, `${token}"`, `${token}:`]) {
+			expect(ngrokTokenSchema.safeParse({ label: 'x', token: bad }).success).toBe(false);
+		}
+	});
+
+	it('lets an update leave the token blank to keep the stored one', () => {
+		expect(ngrokTokenUpdateSchema.safeParse({ token: '' }).success).toBe(true);
+		expect(ngrokTokenUpdateSchema.safeParse({ label: 'New', isDefault: true }).success).toBe(true);
+		expect(ngrokTokenUpdateSchema.safeParse({ token: 'short' }).success).toBe(false);
+	});
+
+	it('defaults a serve to the automatic token choice', () => {
+		const parsed = serveStartSchema.parse({
+			label: 'L',
+			machineId: 'm',
+			baseModel: 'org/model',
+			adapterIds: ['a']
+		});
+		expect(parsed.ngrokToken).toBe('auto');
+		expect(parsed.tunnel).toBe('ngrok');
 	});
 });
 

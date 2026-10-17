@@ -127,7 +127,10 @@ export const adapterSchema = z.object({
 	// optional iconify id + color (nuxt color token or hex) used as the icon when no screenshot
 	iconName: z.string().max(100).optional().or(z.literal('')),
 	iconColor: z.string().max(40).optional().or(z.literal('')),
-	visibility: z.enum(VISIBILITIES).default('public')
+	visibility: z.enum(VISIBILITIES).default('public'),
+	// serve this adapter from an openai-compatible endpoint; null/'' clears it (back to Workers AI)
+	endpointId: z.string().max(64).nullable().optional().or(z.literal('')),
+	endpointModel: z.string().max(200).nullable().optional().or(z.literal(''))
 });
 
 export const adapterCreateSchema = adapterSchema;
@@ -190,6 +193,8 @@ export const userUpdateSchema = z.object({
 export const profileUpdateSchema = z.object({
 	displayName: z.string().min(1).max(50).optional(),
 	bio: z.string().max(500).optional().or(z.literal('')),
+	email: z.email('Enter a valid email address').max(255).optional().or(z.literal('')),
+	notifyJobs: z.boolean().optional(),
 	currentPassword: z.string().min(1).optional(),
 	newPassword: z.string().min(8).max(128).optional()
 });
@@ -215,6 +220,42 @@ export const rateTierSchema = z.object({
 	outputTokensPerHour: z.number().int().min(0),
 	precedence: z.enum(['prompts', 'tokens'])
 });
+
+export const TOOLING_RANGES = {
+	downloadRetries: { min: 1, max: 10 },
+	networkWaitMinutes: { min: 0, max: 120 },
+	bandwidthLimitKbps: { min: 0, max: 1_000_000 }
+};
+
+// the versions end up inside a shell script, so they are checked here as well as quoted there
+export const VLLM_VERSION_RE = /^\d+(\.\d+){1,3}((a|b|rc)\d+)?(\.(post|dev)\d+)?$/;
+export const CLOUDFLARED_VERSION_RE = /^\d{4}\.\d{1,2}\.\d{1,2}$/;
+export const PYTHON_VERSION_RE = /^3\.\d{1,2}(\.\d{1,2})?$/;
+
+export const toolingSettingsSchema = z.object({
+	autoInstall: z.boolean(),
+	pythonVersion: z.string().regex(PYTHON_VERSION_RE, 'Use a version like 3.11'),
+	vllmVersion: z.string().regex(VLLM_VERSION_RE, 'Use a PyPI version like 0.31.0 or 0.31.0rc1'),
+	cloudflaredVersion: z.string().regex(CLOUDFLARED_VERSION_RE, 'Use a version like 2026.10.0'),
+	downloadRetries: z
+		.number()
+		.int()
+		.min(TOOLING_RANGES.downloadRetries.min)
+		.max(TOOLING_RANGES.downloadRetries.max),
+	networkWaitMinutes: z
+		.number()
+		.int()
+		.min(TOOLING_RANGES.networkWaitMinutes.min)
+		.max(TOOLING_RANGES.networkWaitMinutes.max),
+	bandwidthLimitKbps: z
+		.number()
+		.int()
+		.min(TOOLING_RANGES.bandwidthLimitKbps.min)
+		.max(TOOLING_RANGES.bandwidthLimitKbps.max)
+});
+
+// a machine override carries only the fields that differ from the settings
+export const machineToolingSchema = toolingSettingsSchema.partial();
 
 export const settingsSchema = z.object({
 	// branding + social (ported from nuxtpress)
@@ -288,6 +329,7 @@ export const settingsSchema = z.object({
 			logRetentionDays: z.number().int().min(7).max(365)
 		})
 		.optional(),
+	tooling: toolingSettingsSchema.optional(),
 	// feature flags for the stubbed cloudflare single-get/delete endpoints
 	features: z
 		.object({
@@ -324,7 +366,8 @@ const FIELD_LABELS: Record<string, string> = {
 	tags: 'Tags',
 	label: 'Label',
 	accountId: 'Account ID',
-	apiToken: 'API token'
+	apiToken: 'API token',
+	token: 'Token'
 };
 
 export function firstZodIssueMessage(
@@ -365,7 +408,8 @@ export const machineCreateSchema = z
 		keySource: z.enum(['generated', 'provided']).default('generated'),
 		privateKey: z.string().max(20000).optional().or(z.literal('')),
 		passphrase: z.string().max(400).optional().or(z.literal('')),
-		password: z.string().max(400).optional().or(z.literal(''))
+		password: z.string().max(400).optional().or(z.literal('')),
+		tooling: machineToolingSchema.optional()
 	})
 	.refine((v) => v.authMethod !== 'password' || (v.password && v.password.length > 0), {
 		message: 'Password is required for password authentication',
@@ -387,6 +431,8 @@ export const machineUpdateSchema = z.object({
 	connectionType: z.enum(CONNECTION_TYPES).optional(),
 	shared: z.boolean().optional(),
 	isActive: z.boolean().optional(),
+	// null clears every override
+	tooling: machineToolingSchema.nullable().optional(),
 	// secrets are update-only: a blank value keeps the stored one
 	privateKey: z.string().max(20000).optional().or(z.literal('')),
 	passphrase: z.string().max(400).optional().or(z.literal('')),
@@ -512,9 +558,126 @@ export type AdapterUpdateInput = z.infer<typeof adapterUpdateSchema>;
 export type CloudflareAccountInput = z.infer<typeof cloudflareAccountSchema>;
 export type CloudflareAccountUpdateInput = z.infer<typeof cloudflareAccountUpdateSchema>;
 export type SettingsInput = z.infer<typeof settingsSchema>;
+export type MailSettingsInput = z.infer<typeof mailSettingsSchema>;
 export type Capability = z.infer<typeof capabilitySchema>;
 export type RateTier = z.infer<typeof rateTierSchema>;
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 export type AdapterExample = z.infer<typeof exampleSchema>;
+
+export const MAIL_TRANSPORTS = ['binding', 'cloudflare', 'smtp'] as const;
+export const SMTP_TLS_MODES = ['starttls', 'implicit', 'off'] as const;
+// the adapter status that triggers a new-adapter email to subscribers
+export const NOTIFY_ON = ['published', 'listed'] as const;
+
+export const mailSettingsSchema = z.object({
+	enabled: z.boolean().optional(),
+	transport: z.enum(MAIL_TRANSPORTS).optional(),
+	fromAddress: z
+		.email('Must be a valid email')
+		.max(255, 'Email must be 255 characters or less')
+		.optional()
+		.or(z.literal('')),
+	fromName: z.string().max(50, 'Name must be 50 characters or less').optional(),
+	cloudflareAccountId: z
+		.string()
+		.regex(/^[a-f0-9]{32}$/i, 'Account ID must be 32 hex characters')
+		.optional()
+		.or(z.literal('')),
+	cloudflareApiToken: z.string().max(256, 'Token must be 256 characters or less').optional(),
+	smtpHost: z.string().max(253, 'Host must be 253 characters or less').optional(),
+	smtpPort: z.number().int().min(1).max(65535).optional(),
+	smtpTls: z.enum(SMTP_TLS_MODES).optional(),
+	smtpUsername: z.string().max(255, 'Username must be 255 characters or less').optional(),
+	smtpPassword: z.string().max(512, 'Password must be 512 characters or less').optional(),
+	notifyOn: z.enum(NOTIFY_ON).optional()
+});
+
+export const subscribeSchema = z.object({
+	email: z.email('Enter a valid email address').max(255, 'Email must be 255 characters or less'),
+	// honeypot: real visitors never fill it
+	website: z.string().max(200).optional()
+});
+
+export const subscriberLinkSchema = z.object({
+	id: z.string().min(1).max(64),
+	token: z.string().min(1).max(128)
+});
+
+export const SERVE_TUNNELS = ['ngrok', 'cloudflared'] as const;
+
+export const endpointCreateSchema = z.object({
+	label: z.string().min(1, 'Label is required').max(80, 'Label must be 80 characters or less'),
+	// the https and public-host rules are enforced by the server guard, which gives a specific reason
+	baseUrl: z.string().min(1, 'URL is required').max(500, 'URL must be 500 characters or less'),
+	defaultModel: z.string().max(200).optional().or(z.literal('')),
+	apiKey: z.string().max(512, 'Key must be 512 characters or less').optional().or(z.literal('')),
+	shared: z.boolean().default(false)
+});
+
+export const endpointUpdateSchema = z.object({
+	label: z.string().min(1).max(80).optional(),
+	baseUrl: z.string().min(1).max(500).optional(),
+	defaultModel: z.string().max(200).optional().or(z.literal('')),
+	// blank means keep the stored key
+	apiKey: z.string().max(512).optional().or(z.literal('')),
+	shared: z.boolean().optional(),
+	isActive: z.boolean().optional()
+});
+
+export const serveStartSchema = z.object({
+	label: z.string().min(1, 'Label is required').max(80),
+	machineId: z.string().min(1, 'Choose a machine').max(64),
+	// the HuggingFace repo vLLM loads; the adapters must have been trained on it
+	baseModel: z.string().min(1, 'Base model is required').max(200),
+	adapterIds: z
+		.array(z.string().min(1).max(64))
+		.min(1, 'Choose at least one adapter')
+		.max(8, 'At most 8 adapters per server'),
+	port: z.number().int().min(1024).max(65535).default(8000),
+	maxLoraRank: z.number().int().min(1).max(64).default(32),
+	tunnel: z.enum(SERVE_TUNNELS).default('ngrok'),
+	// 'auto', 'machine' (the machine's own ngrok sign in), 'server' (the worker secret) or a stored token id
+	ngrokToken: z.string().min(1).max(64).default('auto'),
+	// the public hostname of a named cloudflared tunnel (needed with a tunnel token)
+	hostname: z.string().max(253).optional().or(z.literal('')),
+	// named cloudflared tunnel token; omit for a free quick tunnel
+	tunnelToken: z.string().max(2048).optional().or(z.literal('')),
+	hfToken: z.string().max(256).optional().or(z.literal('')),
+	shared: z.boolean().default(false)
+});
+
+const NGROK_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
+
+export const ngrokTokenSchema = z.object({
+	label: z.string().min(1, 'Label is required').max(80),
+	token: z
+		.string()
+		.min(20, 'Token looks too short')
+		.max(200)
+		.regex(NGROK_TOKEN_RE, 'Token looks invalid'),
+	shared: z.boolean().default(false),
+	isDefault: z.boolean().default(false)
+});
+
+export const ngrokTokenUpdateSchema = z.object({
+	label: z.string().min(1).max(80).optional(),
+	// blank keeps the stored token
+	token: z
+		.string()
+		.min(20, 'Token looks too short')
+		.max(200)
+		.regex(NGROK_TOKEN_RE, 'Token looks invalid')
+		.optional()
+		.or(z.literal('')),
+	shared: z.boolean().optional(),
+	isDefault: z.boolean().optional(),
+	isActive: z.boolean().optional()
+});
+
+export type NgrokTokenInput = z.infer<typeof ngrokTokenSchema>;
+export type NgrokTokenUpdateInput = z.infer<typeof ngrokTokenUpdateSchema>;
+export type EndpointCreateInput = z.infer<typeof endpointCreateSchema>;
+export type EndpointUpdateInput = z.infer<typeof endpointUpdateSchema>;
+export type ServeStartInput = z.infer<typeof serveStartSchema>;
