@@ -88,6 +88,7 @@ export default defineEventHandler(async (event) => {
 		port: data.port,
 		username: data.username,
 		connectionType: data.connectionType,
+		tooling: storeMachineTooling(data.tooling),
 		...cols
 	});
 

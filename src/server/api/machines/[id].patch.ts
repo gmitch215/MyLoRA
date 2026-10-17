@@ -25,6 +25,7 @@ export default defineEventHandler(async (event) => {
 	if (data.username !== undefined) update.username = data.username;
 	if (data.connectionType !== undefined) update.connectionType = data.connectionType;
 	if (data.isActive !== undefined) update.isActive = data.isActive;
+	if (data.tooling !== undefined) update.tooling = storeMachineTooling(data.tooling);
 	// only managers/admins may toggle sharing
 	if (data.shared !== undefined && caps.canManageMachines) update.shared = data.shared;
 

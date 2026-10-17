@@ -164,6 +164,73 @@ test.describe('machines api', () => {
 		await request.delete(`/api/machines/${created.machine.id}`);
 	});
 
+	test('serve tooling overrides are stored per machine and cleared with null', async ({
+		request
+	}) => {
+		await loginViaApi(request);
+		const created = await (
+			await request.post('/api/machines/create', {
+				data: {
+					label: 'Tooling Box',
+					host: 'mock-ok.local',
+					username: 'trainer',
+					authMethod: 'key',
+					keySource: 'generated',
+					tooling: { vllmVersion: '0.30.0', autoInstall: false }
+				}
+			})
+		).json();
+		expect(created.machine.tooling).toEqual({ vllmVersion: '0.30.0', autoInstall: false });
+
+		const patch = (tooling: unknown) =>
+			request.patch(`/api/machines/${created.machine.id}`, { data: { tooling } });
+		const changed = await (await patch({ downloadRetries: 2, bandwidthLimitKbps: 0 })).json();
+		// an update replaces the whole override set, so the earlier fields are gone
+		expect(changed.machine.tooling).toEqual({ downloadRetries: 2, bandwidthLimitKbps: 0 });
+
+		const list = await (await request.get('/api/machines/list')).json();
+		expect(list.machines.find((m: any) => m.id === created.machine.id).tooling).toEqual({
+			downloadRetries: 2,
+			bandwidthLimitKbps: 0
+		});
+
+		// a patch that leaves tooling out keeps it
+		const renamed = await request.patch(`/api/machines/${created.machine.id}`, {
+			data: { label: 'Renamed' }
+		});
+		expect((await renamed.json()).machine.tooling).toEqual({
+			downloadRetries: 2,
+			bandwidthLimitKbps: 0
+		});
+
+		expect((await patch({ vllmVersion: '$(id)' })).status()).toBe(400);
+		expect((await patch({ downloadRetries: 50 })).status()).toBe(400);
+
+		const cleared = await (await patch(null)).json();
+		expect(cleared.machine.tooling).toBeNull();
+		const empty = await (await patch({})).json();
+		expect(empty.machine.tooling).toBeNull();
+
+		await request.delete(`/api/machines/${created.machine.id}`);
+	});
+
+	test('a machine created without overrides has none', async ({ request }) => {
+		await loginViaApi(request);
+		const created = await (
+			await request.post('/api/machines/create', {
+				data: {
+					label: 'Plain Box',
+					host: 'mock-ok.local',
+					username: 'trainer',
+					authMethod: 'key',
+					keySource: 'generated'
+				}
+			})
+		).json();
+		expect(created.machine.tooling).toBeNull();
+		await request.delete(`/api/machines/${created.machine.id}`);
+	});
+
 	test('delete removes the machine', async ({ request }) => {
 		await loginViaApi(request);
 		const created = await (
