@@ -87,6 +87,14 @@ describe('redactMachine', () => {
 		expect(p.lastCheckedAt).toBe('2026-01-02T00:00:00.000Z');
 	});
 
+	it('exposes the serve tooling overrides, or null when there are none', () => {
+		expect(mod.redactMachine(machineRow()).tooling).toBeNull();
+		expect(mod.redactMachine(machineRow({ tooling: '{"vllmVersion":"0.30.0"}' })).tooling).toEqual({
+			vllmVersion: '0.30.0'
+		});
+		expect(mod.redactMachine(machineRow({ tooling: 'not json' })).tooling).toBeNull();
+	});
+
 	it('never exposes secret columns', () => {
 		const p = mod.redactMachine(machineRow()) as any;
 		expect(p.passwordCipher).toBeUndefined();

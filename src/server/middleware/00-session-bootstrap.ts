@@ -34,6 +34,9 @@ async function loadOrCreate(): Promise<string | undefined> {
 export default defineEventHandler(async (event) => {
 	// no bindings (and no sessions) during prerender; skip to avoid KV-binding warnings
 	if (import.meta.prerender) return;
+	// keep the bindings reachable for work that runs without a request (training steps, mail)
+	const env = (event.context as { cloudflare?: { env?: unknown } }).cloudflare?.env;
+	if (env) (globalThis as { __env__?: unknown }).__env__ = env;
 	try {
 		const cfg = useRuntimeConfig(event);
 		const envProvided = cfg.session?.password;

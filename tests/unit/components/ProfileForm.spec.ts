@@ -15,8 +15,28 @@ mockNuxtImport('storeToRefs', () => (store: any) => store);
 beforeEach(() => {
 	vi.clearAllMocks();
 	user.value = { displayName: 'Greg', bio: 'hi', avatarPathname: 'me.png' };
-	vi.stubGlobal('$fetch', vi.fn().mockResolvedValue({}));
+	stubFetch();
 });
+
+// the form loads the saved email prefs on mount, then everything else is the save/avatar calls
+function stubFetch(
+	prefs = {
+		email: 'greg@example.com',
+		emailConfirmed: false,
+		notifyJobs: true,
+		mailEnabled: true
+	}
+) {
+	vi.stubGlobal(
+		'$fetch',
+		vi.fn(async (url: string) => (url === '/api/users/me/notifications' ? prefs : {}))
+	);
+}
+
+function patchBody() {
+	const call = ($fetch as any).mock.calls.find((c: any[]) => c[0] === '/api/users/me');
+	return call[1].body;
+}
 
 const flush = () => new Promise((r) => setTimeout(r, 20));
 
@@ -50,8 +70,59 @@ describe('ProfileForm', () => {
 			'/api/users/me',
 			expect.objectContaining({ method: 'PATCH' })
 		);
+		expect(patchBody()).toMatchObject({ email: 'greg@example.com', notifyJobs: true });
 		expect(fetchSession).toHaveBeenCalled();
 		expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: 'Profile updated' }));
+	});
+
+	it('loads the saved email prefs and says when mail is not set up', async () => {
+		stubFetch({ email: '', emailConfirmed: false, notifyJobs: false, mailEnabled: false });
+		const w = await mountSuspended(ProfileForm);
+		await flush();
+		expect(w.text()).toContain('Email Me About Training Jobs');
+		expect(w.text()).toContain('Email is not set up on this site yet');
+	});
+
+	it('shows the confirmation state of a saved address and resends on request', async () => {
+		const w = await mountSuspended(ProfileForm);
+		await flush();
+		expect(w.text()).toContain('Not Confirmed');
+		const resend = w
+			.findAllComponents({ name: 'UButton' })
+			.find((b: any) => b.text().includes('Resend Confirmation'));
+		await resend!.trigger('click');
+		await flush();
+		expect($fetch as any).toHaveBeenCalledWith(
+			'/api/users/me/email-confirmation',
+			expect.objectContaining({ method: 'POST' })
+		);
+		expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: 'Confirmation sent' }));
+	});
+
+	it('shows Confirmed and no resend button for a confirmed address', async () => {
+		stubFetch({
+			email: 'greg@example.com',
+			emailConfirmed: true,
+			notifyJobs: true,
+			mailEnabled: true
+		});
+		const w = await mountSuspended(ProfileForm);
+		await flush();
+		expect(w.text()).toContain('Confirmed');
+		expect(w.text()).not.toContain('Resend Confirmation');
+	});
+
+	it('keeps the email fields disabled until the saved prefs have loaded', async () => {
+		let release: (v: unknown) => void = () => {};
+		vi.stubGlobal(
+			'$fetch',
+			vi.fn(() => new Promise((r) => (release = r)))
+		);
+		const w = await mountSuspended(ProfileForm);
+		expect(w.find('input[type="email"]').attributes('disabled')).toBeDefined();
+		release({ email: '', emailConfirmed: false, notifyJobs: false, mailEnabled: true });
+		await flush();
+		expect(w.find('input[type="email"]').attributes('disabled')).toBeUndefined();
 	});
 
 	it('includes password fields in the payload when a new password is set', async () => {
@@ -62,7 +133,7 @@ describe('ProfileForm', () => {
 		await pwInputs[1]!.setValue('newpassword');
 		await saveBtn(w)!.trigger('click');
 		await flush();
-		const body = ($fetch as any).mock.calls[0][1].body;
+		const body = patchBody();
 		expect(body.currentPassword).toBe('oldpw');
 		expect(body.newPassword).toBe('newpassword');
 	});
@@ -95,7 +166,7 @@ describe('ProfileForm', () => {
 		Object.defineProperty(input.element, 'files', { value: [] });
 		await input.trigger('change');
 		await flush();
-		expect($fetch as any).not.toHaveBeenCalled();
+		expect($fetch as any).not.toHaveBeenCalledWith('/api/users/me/avatar', expect.anything());
 	});
 
 	it('removes the avatar', async () => {

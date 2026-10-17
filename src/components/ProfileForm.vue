@@ -63,6 +63,55 @@
 			/>
 		</UFormField>
 
+		<UFormField
+			label="Email"
+			name="email"
+			hint="Only used for emails you turn on below"
+		>
+			<UInput
+				v-model="email"
+				type="email"
+				autocomplete="email"
+				:disabled="!prefsLoaded"
+				class="w-full"
+			/>
+			<div
+				v-if="savedEmail && savedEmail === email.trim().toLowerCase()"
+				class="mt-2 flex items-center gap-2"
+			>
+				<UBadge
+					:color="emailConfirmed ? 'success' : 'warning'"
+					variant="subtle"
+				>
+					{{ emailConfirmed ? 'Confirmed' : 'Not Confirmed' }}
+				</UBadge>
+				<UButton
+					v-if="!emailConfirmed && mailEnabled"
+					size="xs"
+					variant="ghost"
+					:loading="resending"
+					@click="resendConfirmation"
+				>
+					Resend Confirmation
+				</UButton>
+			</div>
+		</UFormField>
+
+		<UFormField
+			name="notifyJobs"
+			:description="
+				mailEnabled
+					? 'One email when a training job you launched ends, sent only to a confirmed address'
+					: 'Email is not set up on this site yet, so nothing will be sent'
+			"
+		>
+			<USwitch
+				v-model="notifyJobs"
+				label="Email Me About Training Jobs"
+				:disabled="!prefsLoaded"
+			/>
+		</UFormField>
+
 		<details class="rounded border border-default p-3">
 			<summary class="cursor-pointer text-sm font-medium">Change password</summary>
 			<div class="mt-3 space-y-3">
@@ -120,15 +169,35 @@ const toast = useToast();
 
 const displayName = ref(user.value?.displayName ?? '');
 const bio = ref(user.value?.bio ?? '');
+const email = ref('');
+const notifyJobs = ref(false);
+const mailEnabled = ref(false);
+const savedEmail = ref('');
+const emailConfirmed = ref(false);
+const resending = ref(false);
+// the saved values arrive after mount; editing before then would be overwritten by them
+const prefsLoaded = ref(false);
 const currentPassword = ref('');
 const newPassword = ref('');
 
-watch(user, (u) => {
-	if (u) {
-		displayName.value = u.displayName;
-		bio.value = u.bio ?? '';
+async function loadPrefs() {
+	try {
+		const prefs = await $fetch<NotificationPrefs>('/api/users/me/notifications', {
+			credentials: 'include'
+		});
+		email.value = prefs.email;
+		savedEmail.value = prefs.email;
+		emailConfirmed.value = prefs.emailConfirmed;
+		notifyJobs.value = prefs.notifyJobs;
+		mailEnabled.value = prefs.mailEnabled;
+	} catch {
+		// the form still works for the other fields
+	} finally {
+		prefsLoaded.value = true;
 	}
-});
+}
+
+onMounted(loadPrefs);
 
 const saving = ref(false);
 const uploading = ref(false);
@@ -143,7 +212,9 @@ async function onSubmit() {
 	try {
 		const body: Record<string, unknown> = {
 			displayName: displayName.value,
-			bio: bio.value
+			bio: bio.value,
+			email: email.value.trim(),
+			notifyJobs: notifyJobs.value
 		};
 		if (newPassword.value) {
 			body.currentPassword = currentPassword.value;
@@ -152,12 +223,26 @@ async function onSubmit() {
 		await $fetch('/api/users/me', { method: 'PATCH', body, credentials: 'include' });
 		await auth.fetchSession();
 		toast.add({ title: 'Profile updated', color: 'success', icon: 'mdi:check' });
+		await loadPrefs();
 		currentPassword.value = '';
 		newPassword.value = '';
 	} catch (e: any) {
 		error.value = e?.data?.statusMessage || e?.statusMessage || 'Failed to update profile';
 	} finally {
 		saving.value = false;
+	}
+}
+
+async function resendConfirmation() {
+	resending.value = true;
+	error.value = '';
+	try {
+		await $fetch('/api/users/me/email-confirmation', { method: 'POST', credentials: 'include' });
+		toast.add({ title: 'Confirmation sent', color: 'success', icon: 'mdi:email-check' });
+	} catch (e: any) {
+		error.value = e?.data?.statusMessage || 'Failed to send the confirmation email';
+	} finally {
+		resending.value = false;
 	}
 }
 

@@ -1,5 +1,13 @@
 import type { APIRequestContext } from '@playwright/test';
 import { loginViaApi } from '../utils/auth';
+import {
+	clearSink,
+	disableMail,
+	enableMail,
+	readSink,
+	setConfirmedEmail,
+	uniqueEmail
+} from '../utils/mail';
 import { createUser, deleteUser } from '../utils/users';
 import { expect, test } from './fixtures';
 
@@ -978,5 +986,67 @@ test.describe('training jobs api', () => {
 			await request.delete(`/api/machines/${m1.id}`);
 			await request.delete(`/api/machines/${m2.id}`);
 		});
+	});
+});
+
+// the author gets one email when a job ends, and only after opting in
+test.describe('training job emails', () => {
+	test.describe.configure({ mode: 'serial' });
+
+	test.afterEach(async ({ request }) => {
+		await loginViaApi(request);
+		await request.patch('/api/users/me', { data: { notifyJobs: false, email: '' } });
+		await disableMail(request);
+	});
+
+	async function finishedJob(request: APIRequestContext, host: string) {
+		const machine = await createMachine(request, host, `Mail ${host}`);
+		const ds = await uploadDataset(request);
+		const create = await createJob(request, machine.id, ds.datasetId, ds.inputKind);
+		const { id } = await create.json();
+		return drive(request, id, 8);
+	}
+
+	test('opted in: one email for a completed job and one for a failed job', async ({ request }) => {
+		await enableMail(request);
+		const email = uniqueEmail('author');
+		await setConfirmedEmail(request, email, { notifyJobs: true });
+
+		const done = await finishedJob(request, 'mock-ok.mail');
+		expect(done.status).toBe('completed');
+		const failed = await finishedJob(request, 'mock-fail.mail');
+		expect(failed.status).toBe('failed');
+
+		const mails = (await readSink(request)).filter((m) => m.to === email);
+		expect(mails.map((m) => m.subject)).toEqual([
+			expect.stringMatching(/^Training job finished:/),
+			expect.stringMatching(/^Training job failed:/)
+		]);
+		expect(mails[0]!.text).toContain('/dashboard/training');
+
+		// polling a finished job again must not send a second email
+		await request.post(`/api/training/jobs/${done.id}/poll`);
+		expect((await readSink(request)).filter((m) => m.to === email)).toHaveLength(2);
+	});
+
+	test('opted out by default: a finished job sends nothing', async ({ request }) => {
+		await enableMail(request);
+		const email = uniqueEmail('quiet');
+		await setConfirmedEmail(request, email, { notifyJobs: false });
+
+		const done = await finishedJob(request, 'mock-ok.quiet');
+		expect(done.status).toBe('completed');
+		expect((await readSink(request)).filter((m) => m.to === email)).toHaveLength(0);
+	});
+
+	test('opted in but unconfirmed: a finished job sends nothing', async ({ request }) => {
+		await enableMail(request);
+		const email = uniqueEmail('unconfirmed');
+		await request.patch('/api/users/me', { data: { email, notifyJobs: true } });
+		await clearSink(request);
+
+		const done = await finishedJob(request, 'mock-ok.unconfirmed');
+		expect(done.status).toBe('completed');
+		expect((await readSink(request)).filter((m) => m.to === email)).toHaveLength(0);
 	});
 });

@@ -5,6 +5,7 @@ import { db } from 'hub:db';
 import type { Machine, TrainingJob } from 'hub:db:schema';
 import { adapters, cloudflareAccounts, machines, trainingJobs, users } from 'hub:db:schema';
 import { kv } from 'hub:kv';
+import { notifyJobFinished } from './job-notify';
 import {
 	fetchRemoteLog,
 	isMockSsh,
@@ -16,6 +17,7 @@ import {
 	type RemoteCreds
 } from './remote';
 import { classifyTrainingFailure, tuneConfigForVram } from './remote-commands';
+import { enqueueAdapter } from './subscribers';
 
 // transient sudo-credential custody
 const SUDO_PW_TTL_S = 900;
@@ -158,6 +160,7 @@ export function redactMachine(row: Machine): PublicMachine {
 		gpuInfo: row.gpuInfo ? safeJson<GpuInfo>(row.gpuInfo) : null,
 		systemInfo: row.systemInfo ? safeJson<SystemInfo>(row.systemInfo) : null,
 		toolingReady: row.toolingReady,
+		tooling: row.tooling ? safeJson<MachineTooling>(row.tooling) : null,
 		hasSelfReport: !!row.selfReportTokenHash,
 		isActive: row.isActive,
 		createdAt: new Date(row.createdAt).toISOString(),
@@ -462,6 +465,12 @@ async function recordFinishTelemetry(jobId: string, status: JobStatus) {
 	}
 }
 
+// every terminal transition goes through here: telemetry, then the author's finish email
+async function onTerminal(jobId: string, status: JobStatus) {
+	await recordFinishTelemetry(jobId, status);
+	await notifyJobFinished(jobId);
+}
+
 async function fail(jobId: string, failureClass: FailureClass, message: string) {
 	const status: JobStatus = failureClass === 'abnormal' ? 'abnormal' : 'failed';
 	await db
@@ -475,7 +484,7 @@ async function fail(jobId: string, failureClass: FailureClass, message: string) 
 			updatedAt: new Date()
 		})
 		.where(eq(trainingJobs.id, jobId));
-	await recordFinishTelemetry(jobId, status);
+	await onTerminal(jobId, status);
 }
 
 // advance one job by exactly one step; safe to call from cron + alarm concurrently
@@ -936,7 +945,7 @@ async function syncAndVerify(
 				updatedAt: new Date()
 			})
 			.where(eq(trainingJobs.id, job.id));
-		await recordFinishTelemetry(job.id, 'completed');
+		await onTerminal(job.id, 'completed');
 		return;
 	}
 
@@ -990,6 +999,7 @@ async function syncAndVerify(
 			updatedAt: new Date()
 		})
 		.where(eq(adapters.id, adapterId));
+	await enqueueAdapter(adapterId);
 
 	await db
 		.update(trainingJobs)
@@ -1015,7 +1025,7 @@ async function publishResult(job: TrainingJob, _config: TrainingConfigView) {
 				updatedAt: new Date()
 			})
 			.where(eq(trainingJobs.id, job.id));
-		await recordFinishTelemetry(job.id, 'completed');
+		await onTerminal(job.id, 'completed');
 	};
 
 	if (!adapterId || !job.autoUploadFinetune) {
@@ -1066,6 +1076,7 @@ async function publishResult(job: TrainingJob, _config: TrainingConfigView) {
 			.update(cloudflareAccounts)
 			.set({ adapterCount: sql`${cloudflareAccounts.adapterCount} + 1`, updatedAt: new Date() })
 			.where(eq(cloudflareAccounts.id, account.id));
+		await enqueueAdapter(adapterId);
 		await complete('Completed and published to Cloudflare.');
 	} catch (e) {
 		const msg = explainCfError(e);
@@ -1073,6 +1084,7 @@ async function publishResult(job: TrainingJob, _config: TrainingConfigView) {
 			.update(adapters)
 			.set({ status: 'listed', statusMessage: `Auto-upload failed: ${msg}`, updatedAt: new Date() })
 			.where(eq(adapters.id, adapterId));
+		await enqueueAdapter(adapterId);
 		await complete(`Completed; auto-upload to Cloudflare failed (${msg}). Adapter is listed.`);
 	}
 }
@@ -1176,5 +1188,5 @@ export async function abortJob(jobId: string): Promise<void> {
 			updatedAt: new Date()
 		})
 		.where(eq(trainingJobs.id, jobId));
-	await recordFinishTelemetry(jobId, 'aborted');
+	await onTerminal(jobId, 'aborted');
 }
