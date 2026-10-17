@@ -116,3 +116,25 @@ function mangleB64(b64: string): string {
 	}
 	return chars.join('');
 }
+
+describe('signLinkToken / verifyLinkToken', () => {
+	it('verifies the token it signed', async () => {
+		const token = await mod.signLinkToken('confirm', 'abc123');
+		expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
+		expect(await mod.verifyLinkToken('confirm', 'abc123', token)).toBe(true);
+	});
+
+	it('is deterministic for the same purpose and id', async () => {
+		expect(await mod.signLinkToken('confirm', 'abc')).toBe(
+			await mod.signLinkToken('confirm', 'abc')
+		);
+	});
+
+	it('rejects another purpose, another id, a changed token, and a wrong length', async () => {
+		const token = await mod.signLinkToken('confirm', 'abc');
+		expect(await mod.verifyLinkToken('unsubscribe', 'abc', token)).toBe(false);
+		expect(await mod.verifyLinkToken('confirm', 'abd', token)).toBe(false);
+		expect(await mod.verifyLinkToken('confirm', 'abc', `${token.slice(0, -1)}x`)).toBe(false);
+		expect(await mod.verifyLinkToken('confirm', 'abc', token.slice(1))).toBe(false);
+	});
+});

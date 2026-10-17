@@ -181,3 +181,37 @@ export function redactAccount(row: CloudflareAccount): PublicCloudflareAccount {
 		updatedAt: new Date(row.updatedAt).toISOString()
 	};
 }
+
+function b64url(bytes: Uint8Array): string {
+	return b64encode(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// hmac key for signed links, derived from the KEK secret under its own label
+async function getTokenKey(): Promise<CryptoKey> {
+	const secret = await resolveKekSecret();
+	const material = new TextEncoder().encode(`mylora:token:v1:${secret}`);
+	const digest = await crypto.subtle.digest('SHA-256', material);
+	return crypto.subtle.importKey('raw', digest, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+}
+
+// signed link tokens (confirm/unsubscribe); the purpose keeps one token from working as another
+export async function signLinkToken(purpose: string, id: string): Promise<string> {
+	const mac = await crypto.subtle.sign(
+		'HMAC',
+		await getTokenKey(),
+		new TextEncoder().encode(`${purpose}:${id}`)
+	);
+	return b64url(new Uint8Array(mac));
+}
+
+export async function verifyLinkToken(
+	purpose: string,
+	id: string,
+	token: string
+): Promise<boolean> {
+	const expected = await signLinkToken(purpose, id);
+	if (expected.length !== token.length) return false;
+	let diff = 0;
+	for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ token.charCodeAt(i);
+	return diff === 0;
+}
