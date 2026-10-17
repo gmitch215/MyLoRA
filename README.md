@@ -34,6 +34,9 @@ over SSH - provision, train, verify, sync back, and optionally publish - with no
   with download analytics.
 - 💬 **Inference Testing** - a per-adapter, rate-limited chat widget for published adapters, plus an
   unlimited `/playground` for developers with a side-by-side compare mode for two adapters/models.
+- 🔌 **Custom Endpoints** - serve an adapter from any OpenAI-compatible endpoint, or have MyLoRA start
+  vLLM with LoRA on a registered machine behind an ngrok or Cloudflare tunnel. See
+  [Endpoints](#-endpoints).
 - 🔐 **Hybrid Cloudflare Accounts** - register shared accounts or let developers bring their own;
   tokens are stored with envelope encryption and never returned by the API.
 - 👥 **Roles + Configurable Permissions** - `administrator` / `manager` / `developer` with a
@@ -45,6 +48,9 @@ over SSH - provision, train, verify, sync back, and optionally publish - with no
   permission, and access policy.
 - 📊 **Analytics Dashboard** - views, unique visitors, downloads, devices, top adapters, plus
   inference and training-run rollups (by status/GPU).
+- 📧 **Email Notifications** - authors can get an email when a training job finishes, fails, or is
+  aborted, and visitors can subscribe to an email for each new published adapter. Delivery uses a
+  Cloudflare `send_email` binding, the Cloudflare Email API, or SMTP. See [Email](#-email).
 - 🌓 **Light/Dark Mode**, SEO, sitemap, and schema.org out of the box.
 
 ## 🧱 Tech Stack
@@ -67,7 +73,9 @@ over SSH - provision, train, verify, sync back, and optionally publish - with no
 | `NUXT_PASSWORD`         | Optional one-time admin bootstrap (else use `/setup`)                  | no                |
 | `NUXT_CF_ACCOUNT_ID`    | Optional default Cloudflare account id (the deployment account)        | no                |
 | `NUXT_CF_API_TOKEN`     | Optional bootstrap token for the default account                       | no                |
+| `NUXT_NGROK_AUTHTOKEN`  | Optional ngrok authtoken that serve jobs can use                       | no                |
 | `MYLORA_MOCK_CF`        | `1` mocks all Cloudflare AND SSH calls (tests/dev only; never in prod) | no                |
+| `MYLORA_IMAGE_RESIZING` | `1` (at build time) serves screenshots through Cloudflare Images       | no                |
 | `NUXT_PUBLIC_*`         | Branding + social links (name, description, theme color, etc.)         | no                |
 
 > 💡 If `NUXT_ENCRYPTION_KEY` is unset, a key is auto-generated and persisted in KV; set it explicitly
@@ -177,6 +185,104 @@ A 1-minute cron is the guaranteed driver; a per-job Durable Object alarm advance
 loop, and an advisory lease serializes the two so a job is never double-driven. Crashed launches are
 recovered after a stall window.
 
+## 📧 Email
+
+Administrators configure delivery under **Email** in the dashboard sidebar: an enable switch, the From
+address, and one of three transports. Credentials use the same envelope encryption as Cloudflare
+tokens and are never returned by the API.
+
+- **Binding** - the `EMAIL` `send_email` binding declared in `wrangler.jsonc`.
+- **Cloudflare Email API** - an account id and an API token with email sending permission.
+- **SMTP** - host, port, TLS mode, username, and password.
+
+Environment variables override the stored settings: `NUXT_MAIL_FROM` plus either
+`NUXT_MAIL_SMTP_HOST` (with `NUXT_MAIL_SMTP_PORT`, `NUXT_MAIL_SMTP_TLS`, `NUXT_MAIL_SMTP_USER`, and
+`NUXT_MAIL_SMTP_PASS`) or `NUXT_MAIL_CF_ACCOUNT_ID` with `NUXT_MAIL_CF_API_TOKEN`.
+
+### Job Emails
+
+Each user adds an email address in their profile and turns on job emails, which are off by default.
+Saving a new address mails a confirmation link, and job emails go only to a confirmed address. The
+job's author gets one email when it completes, fails, loses contact with its machine, or is aborted.
+The address is never shown on public profiles.
+
+### New Adapter Emails
+
+While mail is enabled, the footer shows a subscribe form. A visitor confirms by email, then gets one
+email for each public adapter that reaches the stage the Email page selects: published (the
+default) or listed. Every email carries a one-click unsubscribe link and `List-Unsubscribe`
+headers. The 1-minute cron sends queued emails in batches of 25, and the Email page shows the queue
+and can send it immediately.
+
+## 🔌 Endpoints
+
+An adapter can run its tester on an OpenAI-compatible endpoint instead of Workers AI. Users with the
+Manage Machines capability register endpoints under **Endpoints** in the dashboard sidebar, then
+pick one in an adapter's **Serve From** field. A listed adapter on an endpoint is testable without
+being published to Cloudflare.
+
+- **External** - an https URL ending in the OpenAI-compatible root (`/v1`), an optional API key, and a
+  default model name. Keys are envelope-encrypted and only the last 4 characters are returned.
+- **vLLM on a registered machine** - **Serve With vLLM** copies the chosen adapters to the machine
+  over SSH and starts `vllm serve --enable-lora` in a uv-managed venv. MyLoRA generates the API key
+  and vLLM reads it from `VLLM_API_KEY`. The tunnel is either `ngrok http` or `cloudflared`, a free
+  quick tunnel or a named tunnel with a token and hostname. MyLoRA reads the public URL over SSH,
+  so the machine needs no extra reporting.
+
+Endpoints are shared (anyone who can see an adapter on them can test it, within the rate limits) or
+personal (owner only). The server calls an endpoint only if its URL is https, names a public host
+(no IP addresses, `localhost`, internal suffixes or `workers.dev`), and resolves to public addresses
+at call time. Redirects are not followed, and responses are size-capped. The adapters on one server
+must share its base model, and their rank cannot exceed its max LoRA rank.
+
+### Serve Tooling
+
+A serve job installs what its machine lacks: uv, a uv-managed Python, `vllm` pinned to the version
+in Settings, and the tunnel tool. A tunnel tool already on the machine's `PATH` is used as it is.
+The model downloads before vLLM starts, so an interrupted download resumes and retries.
+
+**Settings > Serve Tooling** holds the defaults, and a machine's form can override any field.
+
+| Setting                | Default   | Effect                                                                    |
+| ---------------------- | --------- | ------------------------------------------------------------------------- |
+| Install Missing Tools  | on        | Off uses only what the machine has and stops if a tool is missing         |
+| Python Version         | 3.11      | The managed Python uv creates for vLLM                                    |
+| vLLM Version           | 0.31.0    | Installed as `vllm==<version>`                                            |
+| cloudflared Version    | 2026.10.0 | Installed only when the machine has no cloudflared                        |
+| Download Attempts      | 5         | Tries per download, with growing pauses                                   |
+| Network Wait (Minutes) | 10        | How long a dropped connection is waited out before the job stops          |
+| Bandwidth Limit (kB/s) | 0         | Caps curl downloads; above 0, uv and the model download run one at a time |
+
+cloudflared downloads are checked against the release sha256: built in for 2026.9.3, 2026.10.0 and
+2026.10.1, and read from the GitHub release for any other version. A download that cannot be
+verified is not installed. ngrok publishes no checksum and no pinned download, so MyLoRA installs
+the current stable build after checking that the archive holds a binary that runs, and its version
+cannot be set. vLLM and its dependencies come from PyPI over TLS through uv, without hash pinning.
+
+A failed job reports one of: network down for longer than the wait, checksum mismatch, disk under
+512 MB free, a tool missing with installs off, or an install that failed.
+
+### ngrok Tokens
+
+An ngrok serve needs an authtoken. The serve form offers **Automatic** (a default token the user may
+use, then the server token, then the machine's own sign in), **The Machine's Own Sign In**, **Server
+Token**, or any stored token. Stored tokens sit under **ngrok Tokens** on the Endpoints page. They
+are envelope-encrypted like Cloudflare account tokens, shared or personal, with one default per
+owner, and only the last 4 characters are shown. The server token is the Worker secret
+`NUXT_NGROK_AUTHTOKEN`.
+
+The token reaches the machine in the job's private env file, and ngrok reads it from a config file
+in the job's private directory, so it never appears in the process list. The env file is deleted
+once the job has read it, and the config file when the server stops or fails.
+
+## 🖼️ Image Resizing
+
+Screenshots are served as uploaded unless `MYLORA_IMAGE_RESIZING=1` is set at build time. With it,
+the cards and the carousel request resized, format-negotiated copies from Cloudflare Images
+transformations (`/cdn-cgi/image/...`), which needs **Images > Transformations** enabled for the
+zone. The free plan covers 5,000 unique transformations a month, and past that the original is
+served.
+
 ## 💻 Local Development
 
 ```bash
@@ -218,11 +324,11 @@ tests/                         # Vitest unit/ + Playwright api/ + UI specs, util
 ## 💾 Storage Layout
 
 - 🗄️ **D1** - relational metadata (`users`, `cloudflare_accounts`, `adapters`, `downloads`,
-  `machines`, `training_jobs`).
+  `machines`, `training_jobs`, `subscribers`, `mail_outbox`).
 - 🪣 **R2** - adapter files (`adapters/{id}/adapter_config.json`, `.../adapter_model.safetensors`,
   `.../screenshots/*`), training inputs + outputs (`datasets/{id}/*`, `jobs/{id}/train.log`,
   `jobs/{id}/weights.safetensors` for download-only runs), and avatars.
-- ⚡ **KV** - settings, session password, rate-limit counters, push-job state, ephemeral per-launch
+- ⚡ **KV** - settings, mail transport settings and sealed credentials, session password, rate-limit counters, push-job state, ephemeral per-launch
   sudo creds (short-TTL, single-use), encryption sentinel, analytics rollups. Read-heavy feeds use
   Nitro's cache (backed by the `CACHE` namespace).
 - ⏰ **Durable Object** - NuxtHub's built-in `$DurableObject`, keyed per training job, holds the alarm

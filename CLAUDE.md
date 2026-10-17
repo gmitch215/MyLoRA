@@ -26,6 +26,28 @@ aligned with the existing Nuxt UI v4 design language.
 - Select options must never use an empty-string value (Reka SelectItem throws); use an `'all'` sentinel.
 - Settings drive permissions/access/rate-limits/features - resolve against settings, not hardcoded roles.
 - Cloudflare tokens are envelope-encrypted and never serialized (only `tokenLast4`).
+- Bump `SCHEMA_VERSION` in `src/server/utils/db.ts` whenever `createSchema` or `ensureColumns` change;
+  a deployed instance only re-runs the migration when its KV flag differs from that version.
+- Mail goes through `server/utils/mail.ts` (three transports, plus a sink when `MYLORA_MAIL_SINK=1`
+  that specs read through `/api/admin/mail/sink`). `users.email` is never part of `PublicUser`.
+- Public settings carry a placeholder URL for an uploaded favicon (`toPublicSettings`), never the
+  data URL.
+- Endpoint urls only reach `fetch` through `endpoint-client.ts`, which re-runs `endpoint-guard.ts`
+  (https, public hostname, DoH-resolved public addresses, no redirects). Keys and serve secrets are
+  envelope-encrypted and leave the server only as `keyLast4`. Registering one needs `canManageMachines`.
+- The serve script (`remote-serve.ts`) installs what a machine lacks, gated by `ToolingSettings`
+  (settings `tooling`, per-machine `machines.tooling` overrides, merged by `mergeTooling`). Every
+  download goes through `fetch_verified` (retries, outage wait, throttle log, sha256) and every
+  failure writes a code from `SERVE_EXIT` to the `exit` file. The script's own log is `serve.log`.
+- Measured limits, retest before relying on them: ngrok ignores the version in its download url
+  (any version string returns the stable archive), so ngrok cannot be pinned and publishes no
+  checksum; the ngrok agent ignores `NGROK_AUTHTOKEN` and reads its token from `--config`; uv
+  0.12.15 installs a wheel whose index hash is wrong, so vLLM has no hash check; cloudflared reads
+  `TUNNEL_TOKEN` from the environment.
+- ngrok authtokens live in `ngrok_tokens` (same envelope helpers as Cloudflare account tokens); a
+  serve resolves `auto`, `machine`, `server` (`NUXT_NGROK_AUTHTOKEN`) or a token id in `ngrok-tokens.ts`.
+- Auto-import names are global on the server: `verifyToken` already exists in `cloudflare.ts`, so new
+  helpers get distinct names. Read the "Duplicated imports" warning from `nuxt prepare`.
 
 ## Commands
 
