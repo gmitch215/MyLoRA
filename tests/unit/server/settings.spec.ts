@@ -6,6 +6,8 @@ import {
 	DEFAULT_LIMITS,
 	DEFAULT_PERMISSIONS,
 	DEFAULT_RATE_LIMITS,
+	DEFAULT_TOOLING,
+	mergeTooling,
 	PUBLIC_LIMIT_RANGES
 } from '../../../src/shared/defaults';
 import {
@@ -29,6 +31,8 @@ vi.stubGlobal('DEFAULT_FEATURES', DEFAULT_FEATURES);
 vi.stubGlobal('DEFAULT_LIMITS', DEFAULT_LIMITS);
 vi.stubGlobal('DEFAULT_PERMISSIONS', DEFAULT_PERMISSIONS);
 vi.stubGlobal('DEFAULT_RATE_LIMITS', DEFAULT_RATE_LIMITS);
+vi.stubGlobal('DEFAULT_TOOLING', DEFAULT_TOOLING);
+vi.stubGlobal('mergeTooling', mergeTooling);
 vi.stubGlobal('PUBLIC_LIMIT_RANGES', PUBLIC_LIMIT_RANGES);
 vi.stubGlobal('clampPublicLimit', clampPublicLimit);
 vi.stubGlobal('CF_MAX_RANK', CF_MAX_RANK);
@@ -160,6 +164,30 @@ describe('getLimits caps to cloudflare maxima', () => {
 	});
 });
 
+describe('getTooling', () => {
+	it('returns the defaults when unset', async () => {
+		expect(await mod.getTooling()).toEqual(DEFAULT_TOOLING);
+	});
+
+	it('fills a field a stored blob predates and ignores an invalid one', async () => {
+		store.set(K('tooling'), { vllmVersion: '0.30.0', downloadRetries: 500, autoInstall: false });
+		const t = await mod.getTooling();
+		expect(t.vllmVersion).toBe('0.30.0');
+		expect(t.autoInstall).toBe(false);
+		expect(t.downloadRetries).toBe(DEFAULT_TOOLING.downloadRetries);
+		expect(t.cloudflaredVersion).toBe(DEFAULT_TOOLING.cloudflaredVersion);
+	});
+
+	it('falls back to the defaults when kv throws and rides along in getAllSettings', async () => {
+		store.set(K('tooling'), { bandwidthLimitKbps: 400 });
+		expect((await mod.getAllSettings()).tooling.bandwidthLimitKbps).toBe(400);
+		getImpl = () => {
+			throw new Error('kv down');
+		};
+		expect(await mod.getTooling()).toEqual(DEFAULT_TOOLING);
+	});
+});
+
 describe('string settings', () => {
 	it('getStringSetting returns null when unset and on error', async () => {
 		expect(await mod.getStringSetting('name')).toBeNull();
@@ -191,5 +219,28 @@ describe('getAllSettings', () => {
 		expect(all.features).toEqual(DEFAULT_FEATURES);
 		expect(all.message).toBeNull();
 		expect(all.limits.maxRank).toBe(CF_MAX_RANK);
+	});
+});
+
+describe('toPublicSettings', () => {
+	const png = 'data:image/png;base64,iVBORw0KGgo=';
+
+	it('swaps an uploaded favicon data url for the route that serves it', () => {
+		const out = mod.toPublicSettings({ name: 'Reg', favicon: png, faviconPng: png });
+		expect(out.favicon).toBe(mod.UPLOADED_FAVICON.favicon);
+		expect(out.faviconPng).toBe(mod.UPLOADED_FAVICON.faviconPng);
+		expect(out.name).toBe('Reg');
+	});
+
+	it('leaves paths, iconify ids and unset values alone', () => {
+		const out = mod.toPublicSettings({ favicon: '/favicon.ico', faviconPng: 'mdi:robot' });
+		expect(out).toEqual({ favicon: '/favicon.ico', faviconPng: 'mdi:robot' });
+		expect(mod.toPublicSettings({})).toEqual({});
+	});
+
+	it('does not mutate its input', () => {
+		const input = { favicon: png };
+		mod.toPublicSettings(input);
+		expect(input.favicon).toBe(png);
 	});
 });

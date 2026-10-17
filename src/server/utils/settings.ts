@@ -20,8 +20,32 @@ export const STRING_SETTING_KEYS = [
 	'supportEmail'
 ] as const;
 
+// an uploaded favicon is stored as a data url (about 2 MB for a real png); public responses carry
+// these urls instead, which the /favicon.* routes serve
+export const UPLOADED_FAVICON = {
+	favicon: '/favicon.ico?v=custom',
+	faviconPng: '/favicon.png?v=custom'
+} as const;
+
+export function toPublicSettings<T extends Record<string, unknown>>(settings: T): T {
+	const out: Record<string, unknown> = { ...settings };
+	for (const k of ['favicon', 'faviconPng'] as const) {
+		const v = out[k];
+		if (typeof v === 'string' && v.startsWith('data:')) out[k] = UPLOADED_FAVICON[k];
+	}
+	return out as T;
+}
+
 // structured keys stored as json
-const JSON_KEYS = ['access', 'permissions', 'rateLimits', 'limits', 'features', 'message'] as const;
+const JSON_KEYS = [
+	'access',
+	'permissions',
+	'rateLimits',
+	'limits',
+	'tooling',
+	'features',
+	'message'
+] as const;
 
 function clampInt(value: number, min: number, max: number): number {
 	const n = Math.trunc(Number(value));
@@ -77,6 +101,10 @@ export async function getLimits(): Promise<LimitsSettings> {
 	};
 }
 
+export async function getTooling(): Promise<ToolingSettings> {
+	return mergeTooling(DEFAULT_TOOLING, await getJson<Partial<ToolingSettings>>('tooling', {}));
+}
+
 export async function getFeatures(): Promise<FeatureFlags> {
 	return getJson('features', DEFAULT_FEATURES);
 }
@@ -98,15 +126,16 @@ export async function getAllSettings() {
 			if (v != null) strings[k] = v;
 		})
 	);
-	const [access, permissions, rateLimits, limits, features, message] = await Promise.all([
+	const [access, permissions, rateLimits, limits, tooling, features, message] = await Promise.all([
 		getAccess(),
 		getPermissions(),
 		getRateLimits(),
 		getLimits(),
+		getTooling(),
 		getFeatures(),
 		getJson<unknown>('message', null)
 	]);
-	return { ...strings, access, permissions, rateLimits, limits, features, message };
+	return { ...strings, access, permissions, rateLimits, limits, tooling, features, message };
 }
 
 export async function setStringSetting(name: string, value: string) {

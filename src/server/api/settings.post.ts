@@ -1,4 +1,12 @@
-const JSON_KEYS = ['access', 'permissions', 'rateLimits', 'limits', 'features', 'message'] as const;
+const JSON_KEYS = [
+	'access',
+	'permissions',
+	'rateLimits',
+	'limits',
+	'tooling',
+	'features',
+	'message'
+] as const;
 
 export default defineEventHandler(async (event) => {
 	await requireManager(event);
@@ -18,7 +26,10 @@ export default defineEventHandler(async (event) => {
 	// branding/social string keys
 	for (const k of STRING_SETTING_KEYS) {
 		const v = data[k];
-		if (typeof v === 'string') await setStringSetting(k, v);
+		if (typeof v !== 'string') continue;
+		// the public placeholder for an uploaded favicon means "unchanged", never a new value
+		if ((k === 'favicon' || k === 'faviconPng') && v === UPLOADED_FAVICON[k]) continue;
+		await setStringSetting(k, v);
 	}
 
 	// structured json keys (caps re-applied by the typed getters on read)
@@ -34,5 +45,5 @@ export default defineEventHandler(async (event) => {
 	}
 
 	await invalidateSettings();
-	return await getAllSettings();
+	return toPublicSettings(await getAllSettings());
 });

@@ -122,4 +122,90 @@ test.describe('settings api', () => {
 			}
 		});
 	});
+
+	test('an uploaded favicon never rides in the public settings payload', async ({ request }) => {
+		await loginViaApi(request);
+		// a ~1.5 MB data url is what a real uploaded png looks like once base64-encoded
+		const dataUrl = `data:image/png;base64,${'A'.repeat(1_500_000)}`;
+		const save = await request.post('/api/settings', {
+			data: { favicon: dataUrl, faviconPng: dataUrl }
+		});
+		expect(save.ok()).toBe(true);
+		const saved = await save.json();
+		expect(saved.faviconPng).toBe('/favicon.png?v=custom');
+
+		const pub = await request.get('/api/settings');
+		const body = await pub.text();
+		expect(body.length).toBeLessThan(20_000);
+		expect(JSON.parse(body).favicon).toBe('/favicon.ico?v=custom');
+
+		// the form posts the placeholder back unchanged: that must not overwrite the upload
+		const resave = await request.post('/api/settings', {
+			data: { favicon: saved.favicon, faviconPng: saved.faviconPng, name: 'Favicon Keeper' }
+		});
+		expect(resave.ok()).toBe(true);
+		const served = await request.get('/favicon.png');
+		expect(served.headers()['content-type']).toContain('image/png');
+		expect((await served.body()).length).toBeGreaterThan(1_000_000);
+
+		// clear it so later specs see the stock icon
+		await request.post('/api/settings', { data: { favicon: '', faviconPng: '' } });
+	});
+
+	test('serve tooling defaults to installing missing tools and round-trips a change', async ({
+		request
+	}) => {
+		const stock = {
+			autoInstall: true,
+			pythonVersion: '3.11',
+			vllmVersion: '0.31.0',
+			cloudflaredVersion: '2026.10.0',
+			downloadRetries: 5,
+			networkWaitMinutes: 10,
+			bandwidthLimitKbps: 0
+		};
+		await loginViaApi(request);
+		await request.post('/api/settings', { data: { tooling: stock } });
+		expect((await (await request.get('/api/settings')).json()).tooling).toEqual(stock);
+
+		const changed = {
+			...stock,
+			autoInstall: false,
+			vllmVersion: '0.30.0',
+			bandwidthLimitKbps: 250
+		};
+		const save = await request.post('/api/settings', { data: { tooling: changed } });
+		expect(save.ok()).toBe(true);
+		expect((await save.json()).tooling).toEqual(changed);
+		expect((await (await request.get('/api/settings')).json()).tooling).toEqual(changed);
+
+		await request.post('/api/settings', { data: { tooling: stock } });
+	});
+
+	test('refuses tooling values that could reach a shell or fall outside their range', async ({
+		request
+	}) => {
+		await loginViaApi(request);
+		const stock = {
+			autoInstall: true,
+			pythonVersion: '3.11',
+			vllmVersion: '0.31.0',
+			cloudflaredVersion: '2026.10.0',
+			downloadRetries: 5,
+			networkWaitMinutes: 10,
+			bandwidthLimitKbps: 0
+		};
+		for (const bad of [
+			{ vllmVersion: '0.31.0; touch /tmp/x' },
+			{ pythonVersion: '3.11 && id' },
+			{ cloudflaredVersion: 'latest' },
+			{ downloadRetries: 0 },
+			{ networkWaitMinutes: 500 },
+			{ bandwidthLimitKbps: -1 }
+		]) {
+			const res = await request.post('/api/settings', { data: { tooling: { ...stock, ...bad } } });
+			expect(res.status(), JSON.stringify(bad)).toBe(400);
+		}
+		expect((await (await request.get('/api/settings')).json()).tooling.vllmVersion).toBe('0.31.0');
+	});
 });
