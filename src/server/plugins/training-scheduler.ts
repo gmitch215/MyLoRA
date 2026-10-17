@@ -1,4 +1,7 @@
+import { backgroundEnv } from '../utils/mail';
 import { reconcileStuckPublishes } from '../utils/publish';
+import { advanceServe, dueServeIds } from '../utils/serve';
+import { drainOutbox } from '../utils/subscribers';
 import { activeJobIds, advanceJob, POLL_INTERVAL_MS, purgeExpiredLogs } from '../utils/training';
 
 // advance a list of jobs with bounded concurrency
@@ -27,8 +30,18 @@ export default defineNitroPlugin((nitroApp) => {
 			await ensureDatabase();
 			const ids = await activeJobIds();
 			if (ids.length) await drive(ids);
+			// vLLM servers on registered machines: start, health-check and stop them
+			for (const id of await dueServeIds()) {
+				await advanceServe(id).catch((e) =>
+					console.warn('scheduler advanceServe failed', id, (e as Error)?.message)
+				);
+			}
 			// finalize adapters left in 'pushing' when a long publish outran the worker's background budget
 			await reconcileStuckPublishes();
+			// send queued new-adapter emails (bounded batch per tick)
+			await drainOutbox(backgroundEnv()).catch((e) =>
+				console.warn('mail drain failed', (e as Error)?.message)
+			);
 			// self-throttled (~every 6h): purge R2 logs past the retention window
 			await purgeExpiredLogs();
 		} catch (e) {

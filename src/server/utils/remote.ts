@@ -98,7 +98,7 @@ function diag(
 }
 
 // map an edgeport error to a specific user-facing diagnosis
-function classifyError(err: unknown): ConnectionDiagnosis {
+export function classifyError(err: unknown): ConnectionDiagnosis {
 	const name = (err as { name?: string })?.name ?? '';
 	const msg = ((err as { message?: string })?.message ?? String(err)).toLowerCase();
 	if (name === 'AuthError' || /auth|publickey|password|permission denied/.test(msg))
@@ -145,7 +145,7 @@ async function mockState(jobId: string) {
 	};
 }
 
-async function edge() {
+export async function edge() {
 	const ssh = await import('edgeport/ssh');
 	const sftp = await import('edgeport/sftp');
 	return { ssh, sftp };
@@ -211,7 +211,7 @@ export async function testConnection(creds: RemoteCreds): Promise<ConnectionDiag
 	}
 }
 
-function connectOpts(creds: RemoteCreds) {
+export function connectOpts(creds: RemoteCreds) {
 	return {
 		hostname: creds.hostname,
 		port: creds.port,
