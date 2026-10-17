@@ -481,6 +481,16 @@
 			</div>
 		</section>
 
+		<!-- tooling -->
+		<section class="space-y-4 border-t border-default pt-4">
+			<h3 class="text-lg font-semibold text-highlighted">Serve Tooling</h3>
+			<p class="text-xs text-muted">
+				What the vLLM serve job installs on a machine and how it copes with slow or dropped
+				connections. A machine can override any of these in its own form.
+			</p>
+			<ToolingFields v-model="toolingModel" />
+		</section>
+
 		<!-- features -->
 		<section class="space-y-3 border-t border-default pt-4">
 			<h3 class="text-lg font-semibold text-highlighted">Features</h3>
@@ -548,6 +558,7 @@ const permissionsState = reactive<PermissionMatrix>(structuredClone(DEFAULT_PERM
 const rateLimitsState = reactive<RateLimits>(structuredClone(DEFAULT_RATE_LIMITS));
 const limits = reactive<LimitsSettings>({ ...DEFAULT_LIMITS });
 const features = reactive<FeatureFlags>({ ...DEFAULT_FEATURES });
+const tooling = reactive<ToolingSettings>({ ...DEFAULT_TOOLING });
 
 // v-model bridges for the matrix/rate-limit child components
 const permissions = computed<PermissionMatrix>({
@@ -557,6 +568,10 @@ const permissions = computed<PermissionMatrix>({
 const rateLimits = computed<RateLimits>({
 	get: () => rateLimitsState,
 	set: (v) => Object.assign(rateLimitsState, v)
+});
+const toolingModel = computed<MachineTooling>({
+	get: () => tooling,
+	set: (v) => Object.assign(tooling, v)
 });
 
 const messageState = computed(() => state.message);
@@ -646,6 +661,7 @@ onMounted(async () => {
 		Object.assign(permissionsState, s.permissions ?? DEFAULT_PERMISSIONS);
 		Object.assign(rateLimitsState, s.rateLimits ?? DEFAULT_RATE_LIMITS);
 		Object.assign(limits, s.limits ?? DEFAULT_LIMITS);
+		Object.assign(tooling, s.tooling ?? DEFAULT_TOOLING);
 		Object.assign(features, s.features ?? DEFAULT_FEATURES);
 		maxWeightsMb.value = Math.round(limits.maxWeightsBytes / (1024 * 1024));
 	} catch {
@@ -682,6 +698,7 @@ async function handleSubmit() {
 			permissions: structuredClone(toRaw(permissionsState)),
 			rateLimits: structuredClone(toRaw(rateLimitsState)),
 			limits: { ...limits },
+			tooling: { ...tooling },
 			features: { ...features }
 		});
 		toast.add({ title: 'Settings updated', color: 'success', icon: 'mdi:check' });

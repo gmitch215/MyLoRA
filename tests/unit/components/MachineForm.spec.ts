@@ -2,6 +2,7 @@ import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MachineForm from '~/components/training/machine/Form.vue';
+import { DEFAULT_TOOLING } from '~/shared/defaults';
 
 beforeEach(() => {
 	setActivePinia(createPinia());
@@ -60,6 +61,50 @@ describe('training/machine/Form', () => {
 			props: { machine: machine({ connectionType: 'tunnel' }) }
 		});
 		expect(w.text()).toContain('ngrok Tunnel');
+	});
+
+	it('shows the serve tooling overrides, filled from the machine and inheriting the settings', async () => {
+		vi.stubGlobal('$fetch', vi.fn().mockResolvedValue({ tooling: DEFAULT_TOOLING }));
+		const w = await mountSuspended(MachineForm, {
+			props: { machine: machine({ tooling: { vllmVersion: '0.30.0' } }) }
+		});
+		expect(w.text()).toContain('Serve Tooling Overrides');
+		const tooling = w.findComponent({ name: 'ToolingFields' });
+		expect(tooling.props('modelValue')).toEqual({ vllmVersion: '0.30.0' });
+		expect(tooling.props('inherit')).toBeTruthy();
+		vi.unstubAllGlobals();
+	});
+
+	it('sends the overrides on save, and null once they are all cleared', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({ machine: machine() });
+		vi.stubGlobal('$fetch', fetchMock);
+		const w = await mountSuspended(MachineForm, {
+			props: { machine: machine({ tooling: { vllmVersion: '0.30.0' } }) }
+		});
+		const form = w.findComponent({ name: 'UForm' });
+		await form.trigger('submit');
+		await new Promise((r) => setTimeout(r, 0));
+		const patch = () =>
+			fetchMock.mock.calls.filter((c) => c[1]?.method === 'PATCH').at(-1)![1].body;
+		expect(patch().tooling).toEqual({ vllmVersion: '0.30.0' });
+
+		w.findComponent({ name: 'ToolingFields' }).vm.$emit('update:modelValue', {});
+		await w.vm.$nextTick();
+		await form.trigger('submit');
+		await new Promise((r) => setTimeout(r, 0));
+		expect(patch().tooling).toBeNull();
+		vi.unstubAllGlobals();
+	});
+
+	it('leaves tooling out of a create that set no overrides', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({ machine: machine() });
+		vi.stubGlobal('$fetch', fetchMock);
+		const w = await mountSuspended(MachineForm);
+		await w.findComponent({ name: 'UForm' }).trigger('submit');
+		await new Promise((r) => setTimeout(r, 0));
+		const create = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST')!;
+		expect(create[1].body.tooling).toBeUndefined();
+		vi.unstubAllGlobals();
 	});
 
 	it('emits cancel when cancel is clicked', async () => {

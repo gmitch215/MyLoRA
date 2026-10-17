@@ -18,6 +18,7 @@ export type FullSettings = {
 	permissions?: PermissionMatrix;
 	rateLimits?: RateLimits;
 	limits?: LimitsSettings;
+	tooling?: ToolingSettings;
 	features?: FeatureFlags;
 };
 
@@ -69,6 +70,7 @@ export const useSettingsStore = defineStore('settings', () => {
 	const access = computed(() => settings.value.access ?? DEFAULT_ACCESS);
 	const rateLimits = computed(() => settings.value.rateLimits ?? DEFAULT_RATE_LIMITS);
 	const limits = computed(() => settings.value.limits ?? DEFAULT_LIMITS);
+	const tooling = computed(() => settings.value.tooling ?? DEFAULT_TOOLING);
 	const features = computed(() => settings.value.features ?? DEFAULT_FEATURES);
 
 	const themeColor = computed(() => settings.value.themeColor);
@@ -96,6 +98,7 @@ export const useSettingsStore = defineStore('settings', () => {
 		access,
 		rateLimits,
 		limits,
+		tooling,
 		features,
 		themeColor,
 		name,

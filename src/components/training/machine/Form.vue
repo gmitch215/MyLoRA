@@ -260,6 +260,18 @@
 				/>
 			</UFormField>
 
+			<div class="space-y-3 border-t border-default pt-4">
+				<h4 class="text-sm font-semibold text-highlighted">Serve Tooling Overrides</h4>
+				<p class="text-xs text-muted">
+					Leave a field blank to use the value from Settings. These apply when this machine runs a
+					vLLM server.
+				</p>
+				<ToolingFields
+					v-model="tooling"
+					:inherit="settingsStore.tooling"
+				/>
+			</div>
+
 			<UAlert
 				v-if="error"
 				color="error"
@@ -296,7 +308,10 @@ const props = defineProps<{ machine?: PublicMachine }>();
 const emit = defineEmits<{ submit: [machine?: PublicMachine]; cancel: [] }>();
 
 const store = useMachinesStore();
+const settingsStore = useSettingsStore();
 const toast = useToast();
+const tooling = ref<MachineTooling>({ ...props.machine?.tooling });
+onMounted(() => settingsStore.fetch().catch(() => {}));
 
 const isEdit = computed(() => !!props.machine);
 
@@ -387,7 +402,8 @@ async function onSubmit(_event: FormSubmitEvent<any>) {
 				port: state.port,
 				username: state.username,
 				connectionType: state.connectionType,
-				shared: state.shared
+				shared: state.shared,
+				tooling: Object.keys(tooling.value).length ? tooling.value : null
 			};
 			// only send a secret when the user typed one (blank keeps the stored value)
 			if (authMethod.value === 'password') {
@@ -418,7 +434,8 @@ async function onSubmit(_event: FormSubmitEvent<any>) {
 				keySource: authMethod.value === 'provided' ? 'provided' : 'generated',
 				privateKey: state.privateKey || undefined,
 				passphrase: state.passphrase || undefined,
-				password: state.password || undefined
+				password: state.password || undefined,
+				tooling: Object.keys(tooling.value).length ? tooling.value : undefined
 			};
 			const res = await store.create(payload);
 			toast.add({ title: 'Machine added', color: 'success', icon: 'mdi:check' });

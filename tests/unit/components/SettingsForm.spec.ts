@@ -2,6 +2,7 @@ import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsForm from '~/components/settings/Form.vue';
+import { DEFAULT_TOOLING } from '~/shared/defaults';
 
 beforeEach(() => {
 	setActivePinia(createPinia());
@@ -77,6 +78,43 @@ describe('settings/Form', () => {
 		// the stored data-url favicon renders in a preview img
 		const srcs = w.findAll('img').map((i) => i.attributes('src') || '');
 		expect(srcs.some((s) => s.startsWith('data:image/png'))).toBe(true);
+		vi.unstubAllGlobals();
+	});
+
+	it('shows the serve tooling section with the stored values', async () => {
+		vi.stubGlobal(
+			'$fetch',
+			vi.fn().mockResolvedValue({
+				...loaded,
+				tooling: { ...DEFAULT_TOOLING, vllmVersion: '0.30.0', autoInstall: false }
+			})
+		);
+		const w = await mountSuspended(SettingsForm);
+		await flush();
+		await w.vm.$nextTick();
+		expect(w.text()).toContain('Serve Tooling');
+		const tooling = w.findComponent({ name: 'ToolingFields' });
+		expect(tooling.exists()).toBe(true);
+		expect(tooling.props('modelValue')).toMatchObject({
+			vllmVersion: '0.30.0',
+			autoInstall: false
+		});
+		vi.unstubAllGlobals();
+	});
+
+	it('saves the tooling section with the rest of the settings', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({ ...loaded, tooling: DEFAULT_TOOLING });
+		vi.stubGlobal('$fetch', fetchMock);
+		const w = await mountSuspended(SettingsForm);
+		await flush();
+		await w.vm.$nextTick();
+		const tooling = w.findComponent({ name: 'ToolingFields' });
+		tooling.vm.$emit('update:modelValue', { ...DEFAULT_TOOLING, downloadRetries: 8 });
+		await w.vm.$nextTick();
+		await w.findComponent({ name: 'UForm' }).trigger('submit');
+		await flush();
+		const post = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST');
+		expect(post![1].body.tooling).toEqual({ ...DEFAULT_TOOLING, downloadRetries: 8 });
 		vi.unstubAllGlobals();
 	});
 
