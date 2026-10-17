@@ -58,14 +58,11 @@ describe('AdapterFilters', () => {
 	it('shows a removable tag chip and clears it', async () => {
 		routeQuery.value = { tag: 'nsfw' };
 		const w = await mountSuspended(Filters);
-		await flush();
-		expect(w.text()).toContain('nsfw');
+		await vi.waitFor(() => expect(w.text()).toContain('nsfw'));
 		const clearBtn = w.findComponent({ name: 'UButton' });
 		await clearBtn.trigger('click');
-		await flush();
 		// the last setFilter call clears the tag
-		const lastCall = setFilter.mock.calls.at(-1)![0];
-		expect(lastCall.tag).toBe('');
+		await vi.waitFor(() => expect(setFilter.mock.calls.at(-1)![0].tag).toBe(''));
 	});
 
 	it('queries the live models endpoint on mount', async () => {
