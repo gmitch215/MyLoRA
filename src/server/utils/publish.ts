@@ -5,6 +5,7 @@ import { kv } from 'hub:kv';
 import { invalidateAdapterLists } from './cache';
 import { listFinetunes } from './cloudflare';
 import { decryptToken } from './crypto';
+import { enqueueAdapter } from './subscribers';
 
 const GRACE_MS = 90_000;
 const GIVE_UP_MS = 15 * 60_000;
@@ -18,6 +19,7 @@ async function markDone(id: string, finetuneName: string) {
 		.update(adapters)
 		.set({ status: 'published', finetuneName, statusMessage: null, updatedAt: new Date() })
 		.where(eq(adapters.id, id));
+	await enqueueAdapter(id);
 	try {
 		await kv.set(`mylora:push:${id}`, { phase: 'done', progress: 100, attempt: 1, ts: Date.now() });
 	} catch {

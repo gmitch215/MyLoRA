@@ -53,6 +53,8 @@
 			</div>
 		</div>
 
+		<SubscribeForm />
+
 		<div class="flex flex-col items-start sm:items-end gap-1 text-[10px] sm:text-xs">
 			<span
 				v-if="settings.supportEmail"
@@ -66,7 +68,7 @@
 					{{ settings.supportEmail }}
 				</NuxtLink>
 			</span>
-			<span class="text-dimmed">
+			<span class="text-muted">
 				powered by
 				<NuxtLink
 					to="https://github.com/gmitch215/MyLoRA"

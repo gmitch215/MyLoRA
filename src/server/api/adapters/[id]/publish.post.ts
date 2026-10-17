@@ -115,6 +115,7 @@ export default defineEventHandler(async (event) => {
 			.set({ adapterCount: sql`${cloudflareAccounts.adapterCount} + 1`, updatedAt: new Date() })
 			.where(eq(cloudflareAccounts.id, accountRowId));
 		await invalidateAdapterLists();
+		await enqueueAdapter(id);
 		await setJob(id, { phase: 'done', progress: 100, attempt: 1, ts: Date.now() });
 	};
 

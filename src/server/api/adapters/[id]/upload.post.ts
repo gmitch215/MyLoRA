@@ -7,6 +7,7 @@ import { invalidateAdapterLists } from '~/server/utils/cache';
 import { canonicalizeAdapterConfig, readRankFromConfig } from '~/server/utils/cloudflare';
 import { ensureDatabase } from '~/server/utils/db';
 import { getLimits } from '~/server/utils/settings';
+import { enqueueAdapter } from '~/server/utils/subscribers';
 
 export default defineEventHandler(async (event) => {
 	await ensureDatabase();
@@ -74,6 +75,7 @@ export default defineEventHandler(async (event) => {
 		.set({ configBytes, weightsBytes, status, updatedAt: new Date() })
 		.where(eq(adapters.id, id));
 	await invalidateAdapterLists();
+	if (status === 'listed' && adapter.status === 'draft') await enqueueAdapter(id);
 
 	return { ok: true, status, configBytes, weightsBytes };
 });
