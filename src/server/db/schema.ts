@@ -13,6 +13,10 @@ export const users = sqliteTable(
 		role: text('role', { enum: ['administrator', 'manager', 'developer'] }).notNull(),
 		bio: text('bio'),
 		avatarPathname: text('avatar_pathname'),
+		email: text('email'),
+		// null until the owner opens the link mailed to the current address; changing the address resets it
+		emailConfirmedAt: integer('email_confirmed_at', { mode: 'timestamp_ms' }),
+		notifyJobs: integer('notify_jobs', { mode: 'boolean' }).notNull().default(false),
 		isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
 		createdAt: integer('created_at', { mode: 'timestamp_ms' })
 			.notNull()
@@ -93,6 +97,10 @@ export const adapters = sqliteTable(
 		finetuneId: text('finetune_id'),
 		// name used as the lora param at inference
 		finetuneName: text('finetune_name'),
+		// served by an openai-compatible endpoint instead of workers ai; endpointModel is the model
+		// name sent to it (for vllm, the --lora-modules name)
+		endpointId: text('endpoint_id'),
+		endpointModel: text('endpoint_model'),
 		authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
 		// draft -> listed -> pushing -> published -> failed/archived; 'migrated' = imported from a cloudflare account
 		status: text('status', {
@@ -190,6 +198,8 @@ export const machines = sqliteTable(
 		gpuInfo: text('gpu_info'),
 		// json SystemInfo snapshot (cpu/ram/disk/os/user/all gpus) from the last preflight
 		systemInfo: text('system_info'),
+		// json overrides of the tooling settings for the vllm serve job; null inherits everything
+		tooling: text('tooling'),
 		toolingReady: integer('tooling_ready', { mode: 'boolean' }).notNull().default(false),
 		// sha-256 hashed token a home box uses to self-report its current ngrok address
 		selfReportTokenHash: text('self_report_token_hash'),
@@ -268,6 +278,8 @@ export const trainingJobs = sqliteTable(
 		lockedAt: integer('locked_at', { mode: 'timestamp_ms' }),
 		// json JobTelemetry: latest live box sample (cpu/ram/vram/disk/net/output size) from the probe
 		telemetry: text('telemetry'),
+		// set once by the conditional update that claims the finish email, so it sends exactly once
+		notifiedAt: integer('notified_at', { mode: 'timestamp_ms' }),
 		consecutiveFailures: integer('consecutive_failures').notNull().default(0),
 		attempt: integer('attempt').notNull().default(0),
 		nextPollAt: integer('next_poll_at', { mode: 'timestamp_ms' }),
@@ -291,6 +303,131 @@ export const trainingJobs = sqliteTable(
 	]
 );
 
+export const inferenceEndpoints = sqliteTable(
+	'inference_endpoints',
+	{
+		id: text('id').primaryKey(),
+		label: text('label').notNull(),
+		ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),
+		// shared endpoints can back adapters anyone may test; personal ones only the owner
+		shared: integer('shared', { mode: 'boolean' }).notNull().default(false),
+		// external = a url someone supplied; vllm = started on a registered machine by a serve job
+		source: text('source', { enum: ['external', 'vllm'] })
+			.notNull()
+			.default('external'),
+		// openai-compatible root including /v1, no trailing slash; filled in once a serve job has a tunnel
+		baseUrl: text('base_url').notNull().default(''),
+		// model name used when an adapter does not set its own endpoint model
+		defaultModel: text('default_model'),
+		// envelope-encrypted bearer key (generated for vllm serves); only the last 4 ever leave the server
+		keyCipher: text('key_cipher'),
+		keyIv: text('key_iv'),
+		keyDekCipher: text('key_dek_cipher'),
+		keyDekIv: text('key_dek_iv'),
+		keyLast4: text('key_last4'),
+		isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+		health: text('health', { enum: ['unchecked', 'ok', 'unreachable', 'auth_failed'] })
+			.notNull()
+			.default('unchecked'),
+		lastDiagnosis: text('last_diagnosis'),
+		lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }),
+		// serve-job fields (vllm source only)
+		machineId: text('machine_id').references(() => machines.id, { onDelete: 'set null' }),
+		serveStatus: text('serve_status', {
+			enum: ['queued', 'provisioning', 'starting', 'ready', 'stopping', 'stopped', 'failed']
+		}),
+		// json: { baseModel, port, tunnel, adapters: [{ adapterId, name }], maxLoraRank, hostname? }
+		serveConfig: text('serve_config'),
+		// envelope-encrypted json { hfToken?, tunnelToken? }, only held for the launch
+		secretsCipher: text('secrets_cipher'),
+		secretsIv: text('secrets_iv'),
+		secretsDekCipher: text('secrets_dek_cipher'),
+		secretsDekIv: text('secrets_dek_iv'),
+		pid: integer('pid'),
+		logTail: text('log_tail'),
+		lockedAt: integer('locked_at', { mode: 'timestamp_ms' }),
+		nextPollAt: integer('next_poll_at', { mode: 'timestamp_ms' }),
+		startedAt: integer('started_at', { mode: 'timestamp_ms' }),
+		stoppedAt: integer('stopped_at', { mode: 'timestamp_ms' }),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`),
+		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`)
+	},
+	(t) => [
+		index('idx_endpoints_owner').on(t.ownerId),
+		index('idx_endpoints_serve_status').on(t.serveStatus)
+	]
+);
+
+// ngrok authtokens for serve jobs, stored like the cloudflare account tokens (envelope-encrypted)
+export const ngrokTokens = sqliteTable(
+	'ngrok_tokens',
+	{
+		id: text('id').primaryKey(),
+		label: text('label').notNull(),
+		tokenCipher: text('token_cipher').notNull(),
+		tokenIv: text('token_iv').notNull(),
+		dekCipher: text('dek_cipher').notNull(),
+		dekIv: text('dek_iv').notNull(),
+		tokenLast4: text('token_last4'),
+		ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),
+		shared: integer('shared', { mode: 'boolean' }).notNull().default(false),
+		isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+		isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`),
+		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`)
+	},
+	(t) => [index('idx_ngrok_tokens_owner').on(t.ownerId)]
+);
+
+export const subscribers = sqliteTable(
+	'subscribers',
+	{
+		id: text('id').primaryKey(),
+		email: text('email').notNull(),
+		status: text('status', { enum: ['pending', 'active'] })
+			.notNull()
+			.default('pending'),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`),
+		confirmedAt: integer('confirmed_at', { mode: 'timestamp_ms' }),
+		confirmationSentAt: integer('confirmation_sent_at', { mode: 'timestamp_ms' })
+	},
+	(t) => [uniqueIndex('idx_subscribers_email').on(t.email)]
+);
+
+export const mailOutbox = sqliteTable(
+	'mail_outbox',
+	{
+		id: text('id').primaryKey(),
+		subscriberId: text('subscriber_id').notNull(),
+		adapterId: text('adapter_id').notNull(),
+		status: text('status', { enum: ['pending', 'sending', 'sent', 'failed'] })
+			.notNull()
+			.default('pending'),
+		attempts: integer('attempts').notNull().default(0),
+		error: text('error'),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`),
+		updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`)
+	},
+	(t) => [
+		uniqueIndex('idx_mail_outbox_subscriber_adapter').on(t.subscriberId, t.adapterId),
+		index('idx_mail_outbox_status_updated').on(t.status, t.updatedAt)
+	]
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Machine = typeof machines.$inferSelect;
@@ -302,3 +439,7 @@ export type NewAdapter = typeof adapters.$inferInsert;
 export type CloudflareAccount = typeof cloudflareAccounts.$inferSelect;
 export type NewCloudflareAccount = typeof cloudflareAccounts.$inferInsert;
 export type Download = typeof downloads.$inferSelect;
+export type InferenceEndpoint = typeof inferenceEndpoints.$inferSelect;
+export type NgrokToken = typeof ngrokTokens.$inferSelect;
+export type Subscriber = typeof subscribers.$inferSelect;
+export type MailOutboxRow = typeof mailOutbox.$inferSelect;
