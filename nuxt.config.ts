@@ -30,6 +30,22 @@ export default defineNuxtConfig({
 		analyticsSalt: process.env.NUXT_ANALYTICS_SALT || 'dev_analytics_salt_change_me_please',
 		encryptionKey: process.env.NUXT_ENCRYPTION_KEY || '',
 		mockCf: process.env.MYLORA_MOCK_CF === '1',
+		mail: {
+			sink: process.env.MYLORA_MAIL_SINK === '1',
+			from: '',
+			smtpHost: '',
+			smtpPort: 587,
+			smtpTls: 'starttls',
+			smtpUser: '',
+			smtpPass: '',
+			cfAccountId: '',
+			cfApiToken: '',
+			cfApiBase: 'https://api.cloudflare.com/client/v4',
+			exportPageSize: 1000
+		},
+		ngrok: {
+			authtoken: ''
+		},
 		cf: {
 			accountId: process.env.NUXT_CF_ACCOUNT_ID || '',
 			apiToken: process.env.NUXT_CF_API_TOKEN || ''
@@ -172,6 +188,9 @@ export default defineNuxtConfig({
 		]
 	],
 	image: {
+		// build-time: the cloudflare provider needs Images transformations enabled on the zone, so
+		// without it screenshots are served as uploaded
+		provider: process.env.MYLORA_IMAGE_RESIZING === '1' ? 'cloudflare' : 'none',
 		quality: 85,
 		format: ['webp', 'avif'],
 		screens: {
@@ -189,6 +208,13 @@ export default defineNuxtConfig({
 					quality: 85,
 					fit: 'cover'
 				}
+			},
+			// onerror=redirect serves the original when the free monthly transformation quota is spent
+			card: {
+				modifiers: { format: 'auto', quality: 80, fit: 'cover', onerror: 'redirect' }
+			},
+			viewer: {
+				modifiers: { format: 'auto', quality: 85, fit: 'contain', onerror: 'redirect' }
 			}
 		}
 	},

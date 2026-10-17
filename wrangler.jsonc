@@ -20,6 +20,11 @@
 			"binding": "BLOB"
 		}
 	],
+	"send_email": [
+		{
+			"name": "EMAIL"
+		}
+	],
 	"ai": {
 		"binding": "AI",
 		"experimental_remote": true
