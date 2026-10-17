@@ -167,6 +167,36 @@
 			</UFormField>
 		</div>
 
+		<div
+			v-if="canEndpoint && adapterId"
+			class="grid gap-4 sm:grid-cols-2"
+		>
+			<UFormField
+				label="Serve From"
+				name="endpointId"
+				help="Run the tester on an OpenAI-compatible endpoint instead of Workers AI"
+			>
+				<USelect
+					v-model="servedFrom"
+					:items="servedFromItems"
+					value-key="value"
+					class="w-full"
+				/>
+			</UFormField>
+			<UFormField
+				v-if="state.endpointId"
+				label="Endpoint Model Name"
+				name="endpointModel"
+				help="The model or LoRA name the endpoint is asked for. Defaults to the slug."
+			>
+				<UInput
+					v-model="endpointModelText"
+					:placeholder="state.slug"
+					class="w-full"
+				/>
+			</UFormField>
+		</div>
+
 		<UFormField
 			label="Prompt Template"
 			name="promptTemplate"
@@ -453,8 +483,35 @@ const state = reactive<AdapterInput>({
 	examples: props.adapter?.examples?.map((e) => ({ input: e.input, output: e.output ?? '' })) ?? [],
 	iconName: props.adapter?.iconName ?? '',
 	iconColor: props.adapter?.iconColor ?? 'primary',
-	visibility: props.adapter?.visibility ?? access.value.defaultVisibility
+	visibility: props.adapter?.visibility ?? access.value.defaultVisibility,
+	endpointId: props.adapter?.endpointId ?? '',
+	endpointModel: props.adapter?.endpointModel ?? ''
 });
+
+// binding an adapter to an endpoint needs the same capability as registering one
+const endpointsStore = useEndpointsStore();
+const canEndpoint = computed(() => auth.can('canManageMachines'));
+onMounted(() => {
+	if (canEndpoint.value) endpointsStore.fetch().catch(() => {});
+});
+// the select cannot hold an empty value, so Workers AI is the 'cf' sentinel
+const servedFrom = computed({
+	get: () => state.endpointId || 'cf',
+	set: (value: string) => {
+		state.endpointId = value === 'cf' ? '' : value;
+		if (!state.endpointId) state.endpointModel = '';
+	}
+});
+const endpointModelText = computed({
+	get: () => state.endpointModel ?? '',
+	set: (value: string) => {
+		state.endpointModel = value;
+	}
+});
+const servedFromItems = computed(() => [
+	{ label: 'Cloudflare Workers AI', value: 'cf' },
+	...endpointsStore.endpoints.map((e) => ({ label: e.label, value: e.id }))
+]);
 
 // the active draft/edit id; drives whether asset uploads are enabled
 const adapterId = ref<string | null>(props.adapter?.id ?? null);
@@ -607,7 +664,10 @@ function payload() {
 		examples: state.examples.filter((e) => e.input),
 		iconName: state.iconName,
 		iconColor: state.iconColor,
-		visibility: state.visibility
+		visibility: state.visibility,
+		...(canEndpoint.value && adapterId.value
+			? { endpointId: state.endpointId || null, endpointModel: state.endpointModel || null }
+			: {})
 	};
 }
 

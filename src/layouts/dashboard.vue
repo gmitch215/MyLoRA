@@ -81,12 +81,16 @@ const navItems = computed(() => {
 		items.push({ label: 'Training', icon: 'i-lucide-cpu', to: '/dashboard/training' });
 		items.push({ label: 'Machines', icon: 'i-lucide-server', to: '/dashboard/machines' });
 	}
+	if (auth.can('canManageMachines')) {
+		items.push({ label: 'Endpoints', icon: 'mdi:api', to: '/dashboard/endpoints' });
+	}
 	// settings is manager+; analytics + users are admin-only
 	if (auth.isManager) {
 		items.push({ label: 'Settings', icon: 'mdi:cog', to: '/dashboard/settings' });
 	}
 	if (auth.isAdmin) {
 		items.push({ label: 'Users', icon: 'mdi:account-multiple', to: '/admin/users' });
+		items.push({ label: 'Email', icon: 'mdi:email-outline', to: '/admin/email' });
 		items.push({ label: 'Analytics', icon: 'mdi:chart-line', to: '/dashboard/analytics' });
 	}
 	return items;
