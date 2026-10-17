@@ -12,6 +12,8 @@
 				<NuxtImg
 					:src="screenshotUrl(shot)"
 					:alt="`screenshot ${idx + 1}`"
+					preset="card"
+					sizes="160px"
 					class="h-full w-full object-cover"
 					loading="lazy"
 				/>
@@ -73,11 +75,6 @@ const picked = ref<File | null>(null);
 const uploading = ref(false);
 const removingIdx = ref<number | null>(null);
 const error = ref('');
-
-function screenshotUrl(pathname: string) {
-	if (/^(https?:)?\//.test(pathname)) return pathname;
-	return `/files/${pathname}`;
-}
 
 // upload as soon as a file is picked; the store targets the active draft id
 watch(picked, async (file) => {

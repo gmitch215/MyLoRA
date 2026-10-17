@@ -20,6 +20,7 @@
 			<USelectMenu
 				v-model="baseModel"
 				:items="baseModelItems"
+				:aria-label="baseModelLabel"
 				value-key="value"
 				class="w-full"
 			/>
@@ -98,6 +99,11 @@ const baseModelItems = computed(() => [
 	{ label: 'All Base Models', value: ALL },
 	...liveModels.value.map((m) => ({ label: m.split('/').pop() || m, value: m }))
 ]);
+
+// reka's trigger defaults to a "Show popup" label that hides the visible text
+const baseModelLabel = computed(
+	() => baseModelItems.value.find((i) => i.value === baseModel.value)?.label ?? 'Base Model'
+);
 
 const modelTypeItems = [
 	{ label: 'All Types', value: ALL },

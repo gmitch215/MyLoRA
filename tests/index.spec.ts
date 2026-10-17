@@ -51,4 +51,39 @@ test.describe('home page', () => {
 		await waitForHydration(page);
 		await expect(page.getByRole('button', { name: /log in/i }).first()).toBeVisible();
 	});
+
+	test('only links the svg favicon when the favicon is an iconify id', async ({ page }) => {
+		const missing: string[] = [];
+		page.on('response', (res) => {
+			if (res.status() === 404) missing.push(new URL(res.url()).pathname);
+		});
+		await page.goto('/', { waitUntil: 'domcontentloaded' });
+		await waitForHydration(page);
+		await expect(page.locator('link[href="/favicon.svg"]')).toHaveCount(0);
+		expect(missing).not.toContain('/favicon.svg');
+	});
+
+	test('the log in button keeps its name when the label is hidden on a narrow screen', async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: 375, height: 700 });
+		await page.goto('/', { waitUntil: 'domcontentloaded' });
+		await waitForHydration(page);
+		await expect(page.locator('button[aria-label="Log In"]')).toBeVisible();
+	});
+
+	test('adapter cards head their title at level 2 under the page h1', async ({
+		page,
+		context,
+		request
+	}) => {
+		await loginContext(context);
+		const { id } = await createAdapter(request, { name: `Heading Adapter ${Date.now()}` });
+		await uploadAssets(request, id);
+		await page.goto('/', { waitUntil: 'domcontentloaded' });
+		await waitForHydration(page);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+		await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
+		await expect(page.locator('a[href^="/adapters/"] h3')).toHaveCount(0);
+	});
 });

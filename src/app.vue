@@ -46,11 +46,18 @@ useSeoMeta({
 	appleMobileWebAppCapable: 'yes'
 });
 
+// the /favicon.svg route only serves iconify ids; linking it otherwise is a 404 on every page
+const isIconifyFavicon = computed(() =>
+	/^[\w-]+:[\w-]+$/.test((settings.value.favicon || settings.value.faviconPng || '').trim())
+);
+
 useHead({
 	htmlAttrs: { lang: 'en' },
 	link: [
 		// svg (iconify) is preferred when present; ico/png cover uploads + older browsers
-		{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+		...(isIconifyFavicon.value
+			? [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' } as const]
+			: []),
 		{ rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
 		{ rel: 'icon', type: 'image/png', href: '/favicon.png' },
 		{ rel: 'apple-touch-icon', href: '/favicon.png' },

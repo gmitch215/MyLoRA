@@ -12,6 +12,8 @@
 			<NuxtImg
 				:src="screenshotUrl(item)"
 				:alt="`screenshot ${item.split('/').pop()}`"
+				preset="viewer"
+				sizes="100vw lg:960px"
 				class="h-full w-full object-contain"
 				loading="lazy"
 			/>
@@ -21,10 +23,4 @@
 
 <script setup lang="ts">
 defineProps<{ screenshots: string[] }>();
-
-// screenshots are r2 pathnames; served from the /files blob route
-function screenshotUrl(pathname: string) {
-	if (/^(https?:)?\//.test(pathname)) return pathname;
-	return `/files/${pathname}`;
-}
 </script>

@@ -160,6 +160,7 @@
 							icon="mdi:account-lock-open"
 							variant="subtle"
 							color="primary"
+							aria-label="Log In"
 							@click="loginOpen = true"
 						>
 							<span class="hidden sm:inline">Log In</span>

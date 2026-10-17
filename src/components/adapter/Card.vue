@@ -14,6 +14,8 @@
 						v-if="thumbnail"
 						:src="thumbnail"
 						:alt="adapter.name"
+						preset="card"
+						sizes="sm:100vw md:50vw lg:400px"
 						class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 						loading="lazy"
 					/>
@@ -47,9 +49,9 @@
 
 				<div class="p-4 space-y-3">
 					<div class="flex items-start justify-between gap-2">
-						<h3 class="font-semibold text-highlighted leading-tight line-clamp-2">
+						<h2 class="font-semibold text-highlighted leading-tight line-clamp-2">
 							{{ adapter.name }}
-						</h3>
+						</h2>
 					</div>
 
 					<div class="flex flex-wrap items-center gap-1.5">
@@ -142,7 +144,7 @@ const buildMenu = useAdapterMenu();
 // screenshots are r2 pathnames served from the /files blob route
 const thumbnail = computed(() => {
 	const first = props.adapter.screenshots?.[0];
-	return first ? `/files/${first}` : null;
+	return first ? screenshotUrl(first) : null;
 });
 
 const STATUS_COLORS: Record<AdapterStatus, string> = {
